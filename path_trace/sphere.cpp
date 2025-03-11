@@ -2,6 +2,7 @@
 #include "graphics.h"
 #include <numbers>
 #include <algorithm>
+#include <imgui.h>
 
 struct uv_sphere_generator {
     // https://gist.github.com/Pikachuxxxx/5c4c490a7d7679824e0e18af42918efc

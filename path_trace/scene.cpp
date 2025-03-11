@@ -1,5 +1,6 @@
 #include "scene.h"
 #include "graphics.h"
+#include <imgui.h>
 
 w::Scene::Scene(Graphics& gfx, wis::Result result)
     : object_cbuffer(gfx.allocator.CreateUploadBuffer(result, sizeof(ObjectCBuffer) * spheres_count + 1))

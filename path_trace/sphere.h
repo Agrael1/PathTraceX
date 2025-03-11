@@ -2,6 +2,7 @@
 #include <wisdom/wisdom_raytracing.hpp>
 #include <DirectXMath.h>
 #include <string>
+#include <wisdom/wisdom.hpp>
 
 namespace w {
 class Graphics;

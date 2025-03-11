@@ -1,5 +1,6 @@
 #include "window.h"
 #include "consts.h"
+#include <wisdom/wisdom_platform.hpp>
 
 wis::SwapChain w::Window::CreateSwapchain(wis::Result& result, const wis::Device& device, const wis::CommandQueue& main_queue)
 {
