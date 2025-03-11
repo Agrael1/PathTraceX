@@ -53,8 +53,6 @@ private:
     wis::Texture uav_texture[w::flight_frames];
     wis::UnorderedAccessTexture uav_output[w::flight_frames];
 
-    wis::RaytracingDispatchDesc rt_dispatch_desc;
-
     w::Scene scene;
 };
 } // namespace w

@@ -57,6 +57,13 @@ WIS_COMPILE_SHADER(
 	SHADER "shaders/imgui.ps.hlsl"
 	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shaders/imgui.ps"
 )
+WIS_COMPILE_SHADER(
+	TARGET shaders
+	SHADER "shaders/pathtrace.lib.hlsl"
+	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shaders/pathtrace.lib"
+	SHADER_MODEL "6.3"
+	TYPE "lib"
+)
 WIS_INSTALL_DEPS(${PROJECT_NAME})
 
 add_dependencies(${PROJECT_NAME} shaders)

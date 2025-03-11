@@ -3,28 +3,6 @@
 #include <filesystem>
 #include <fstream>
 
-std::string LoadShader(std::filesystem::path p)
-{
-    if constexpr (wis::shader_intermediate == wis::ShaderIntermediate::DXIL) {
-        p += u".cso";
-    } else {
-        p += u".spv";
-    }
-
-    if (!std::filesystem::exists(p)) {
-        throw w::Exception(wis::format("Shader file not found: {}", p.string()));
-    }
-
-    std::ifstream t{ p, std::ios::binary };
-    t.seekg(0, std::ios::end);
-    size_t size = t.tellg();
-    std::string ret;
-    ret.resize(size);
-    t.seekg(0);
-    t.read(ret.data(), size);
-    return ret;
-}
-
 w::App::App()
     : window("Path Tracing", 1280, 720)
     , gfx(window.GetPlatformExtension())
@@ -37,6 +15,7 @@ w::App::App()
 
     auto [w, h] = window.PixelSize();
     CreateSizeDependentResources(uint32_t(w), uint32_t(h));
+    scene.Bind(gfx, desc_storage);
 }
 
 w::App::~App()
@@ -252,11 +231,11 @@ void w::App::CopyToSwapchain()
 
     wis::TextureCopyRegion region{
         .src = {
-                .size = { rt_dispatch_desc.width, rt_dispatch_desc.height, 1 },
+                .size = { width, height, 1 },
                 .format = w::swap_format,
         },
         .dst = {
-                .size = { rt_dispatch_desc.width, rt_dispatch_desc.height, 1 },
+                .size = { width, height, 1 },
                 .format = w::swap_format,
         },
     };
@@ -293,13 +272,13 @@ void w::App::CreateSizeDependentResources(uint32_t width, uint32_t height)
     if (width <= this->width && height <= this->height) {
         this->width = width;
         this->height = height;
-        rt_dispatch_desc.width = width;
-        rt_dispatch_desc.height = height;
+        scene.UpdateDispatch(width, height);
         return;
     }
 
     this->width = width;
     this->height = height;
+    scene.UpdateDispatch(width, height);
 
     // Create UAV texture
     wis::TextureDesc desc{
@@ -319,11 +298,6 @@ void w::App::CreateSizeDependentResources(uint32_t width, uint32_t height)
         uav_output[i] = gfx.device.CreateUnorderedAccessTexture(result, uav_texture[i], uav_desc);
         desc_storage.WriteRWTexture(rw_texture_binding, i, uav_output[i]);
     }
-
-    // Update dispatch desc
-    rt_dispatch_desc.width = width;
-    rt_dispatch_desc.height = height;
-    rt_dispatch_desc.depth = 1;
 
     MakeTransitions();
 }

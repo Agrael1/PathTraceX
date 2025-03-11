@@ -30,7 +30,7 @@ class SphereStatic
 public:
     SphereStatic(w::Graphics& gfx);
 
-private:
+public:
     IndexedTriangleList list;
 };
 
@@ -39,7 +39,7 @@ class BoxStatic
 public:
     BoxStatic(w::Graphics& gfx);
 
-private:
+public:
     IndexedTriangleList list;
 };
 
