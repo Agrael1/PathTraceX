@@ -5,14 +5,15 @@
 static constexpr const char* SAMPLING_LABELS[4] = { "Uniform", "Cosine", "GGX", "Mix" };
 static constexpr const char* BRDF_LABELS[4] = { "Lambert", "LambertWithAlbedo", "GGX", "Mix" };
 
+static constexpr uint32_t render_constants_offset = wis::detail::aligned_size(sizeof(w::Camera::CBuffer), 256ull);
+
 w::Scene::Scene(Graphics& gfx, wis::Result result)
     : object_cbuffer(gfx.allocator.CreateUploadBuffer(result, sizeof(MaterialCBuffer) * objects_count))
     , instance_buffer(gfx.allocator.CreateUploadBuffer(result, sizeof(wis::AccelerationInstance) * objects_count))
-    , camera_buffer(gfx.allocator.CreateUploadBuffer(result, wis::detail::aligned_size(sizeof(w::Camera::CBuffer), 256ull) + sizeof(RenderingConstants)))
+    , camera_buffer(gfx.allocator.CreateUploadBuffer(result, render_constants_offset))
     , sphere_static(gfx)
     , box_static(gfx)
     , mapped_cbuffer(object_cbuffer.Map<MaterialCBuffer>(), objects_count)
-    , mapped_rendering_constants(reinterpret_cast<RenderingConstants*>(camera_buffer.Map<uint8_t>() + 256), 1)
     , mapped_camera(camera_buffer.Map<w::Camera::CBuffer>(), 1)
 {
     // Box
@@ -82,7 +83,6 @@ w::Scene::Scene(Graphics& gfx, wis::Result result)
         object_views[i].GatherInstanceTransform(mapped_instances[i]);
     }
 
-
     // set material cbuffer
     for (uint32_t i = 0; i < objects_count; ++i) {
         mapped_cbuffer[i] = object_views[i].material;
@@ -120,18 +120,11 @@ void w::Scene::RenderUI()
         // clear();
     }
 
-    if (ImGui::Combo("Sampling", &current_sampling, SAMPLING_LABELS, IM_ARRAYSIZE(SAMPLING_LABELS))) {
-        ResetFrames();
-        mapped_rendering_constants[0].samplingFn = current_sampling;
-    }
-    if (ImGui::Combo("BRDF", &current_brdf, BRDF_LABELS, IM_ARRAYSIZE(BRDF_LABELS))) {
-        ResetFrames();
-        mapped_rendering_constants[0].BRDF = current_brdf;
-    }
-    if (ImGui::SliderInt("Bounces", &bounces, 1, 24)) {
-        ResetFrames();
-        mapped_rendering_constants[0].maxDepth = bounces;
-    }
+    bool reset = false;
+
+    reset |= ImGui::Combo("Sampling", &constants.sampling_fn, SAMPLING_LABELS, IM_ARRAYSIZE(SAMPLING_LABELS));
+    reset |= ImGui::Combo("BRDF", &constants.brdf, BRDF_LABELS, IM_ARRAYSIZE(BRDF_LABELS));
+    reset |= ImGui::SliderInt("Bounces", &constants.max_depth, 1, 24);
     ImGui::End();
 
     bool updated_tlas = false;
@@ -144,6 +137,9 @@ void w::Scene::RenderUI()
         for (int i = 0; i < w::flight_frames; ++i) {
             update_tlas[i] = true;
         }
+    }
+    if (reset) {
+        ResetFrames();
     }
 }
 
@@ -175,21 +171,22 @@ void w::Scene::RenderScene(Graphics& gfx, wis::CommandList& cmd_list, wis::Descr
         cmd_list.BufferBarrier(barrier, as_buffer);
     }
     if (update_buffers[current_frame]) {
-        frame_count = 0;
+        constants.frame_count = 0;
         update_buffers[current_frame] = false;
     }
 
     rt.SetPipelineState(cmd_list, pipeline);
     cmd_list.SetComputeRootSignature(root);
 
-    std::pair<uint32_t, uint32_t> frame_ref = { current_frame, frame_count++ };
-    cmd_list.SetComputePushConstants(&frame_ref, 2, 0);
+    constants.frame = current_frame;
+    cmd_list.SetComputePushConstants(&constants, sizeof(constants) / 4, 0);
     rt.PushDescriptor(cmd_list, wis::DescriptorType::ConstantBuffer, 0, camera_buffer, 0);
     rt.PushDescriptor(cmd_list, wis::DescriptorType::ConstantBuffer, 1, object_cbuffer, 0);
-    rt.PushDescriptor(cmd_list, wis::DescriptorType::ConstantBuffer, 2, camera_buffer, wis::detail::aligned_size(sizeof(w::Camera::CBuffer), 256ull));
     rt.SetDescriptorStorage(cmd_list, dstorage);
 
     rt.DispatchRays(cmd_list, dispatch_desc);
+
+    constants.frame_count++;
 }
 
 void w::Scene::CreateAccelerationStructures(Graphics& gfx)
@@ -300,10 +297,9 @@ void w::Scene::CreatePipeline(Graphics& gfx, std::span<wis::DescriptorBindingDes
     auto& allocator = gfx.GetAllocator();
 
     wis::PushConstant constants[] = {
-        { .stage = wis::ShaderStages::All, .size_bytes = sizeof(uint32_t) * 2, .bind_register = 4 },
+        { .stage = wis::ShaderStages::All, .size_bytes = sizeof(RenderingConstants), .bind_register = 4 },
     };
     wis::PushDescriptor push_desc[] = {
-        { .stage = wis::ShaderStages::All, .type = wis::DescriptorType::ConstantBuffer },
         { .stage = wis::ShaderStages::All, .type = wis::DescriptorType::ConstantBuffer },
         { .stage = wis::ShaderStages::All, .type = wis::DescriptorType::ConstantBuffer },
     };

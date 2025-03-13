@@ -10,6 +10,10 @@ struct FrameIndex
 {
     uint frameIndex;
     uint frameCount;
+    
+    int maxDepth;
+    int samplingFn;
+    int BRDF;
 };
 struct FrameCBuffer
 {
@@ -29,10 +33,4 @@ struct Material {
 struct MaterialCBuffer
 {
     Material materials[5];
-};
-struct RenderingConstants
-{
-    uint maxDepth;
-    uint samplingFn;
-    uint BRDF;
 };

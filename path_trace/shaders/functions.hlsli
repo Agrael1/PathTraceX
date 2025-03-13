@@ -81,8 +81,7 @@ float3 UniformHemisphereSample(float2 sigma, float3 normal)
     float3 tangent = cross(bitangent, normal);
     float r = sqrt(max(0.0f, 1.0f - sigma.x * sigma.x));
     float phi = 2.0f * PI * sigma.y;
-
-	// Get our cosine-weighted hemisphere lobe sample direction
+    
     return tangent * (r * cos(phi).x) + bitangent * (r * sin(phi)) + normal * sigma.x;
 }
 
@@ -92,5 +91,7 @@ float3 CosineWeightedHemisphereSample(float2 sigma, float3 normal)
     float3 tangent = cross(bitangent, normal);
     float r = sqrt(sigma.x);
     float phi = 2.0f * PI * sigma.y;
-    return tangent * (r * cos(phi).x) + bitangent * (r * sin(phi)) + normal * sqrt(1 - sigma.x);
+
+	// Get our cosine-weighted hemisphere lobe sample direction
+    return tangent * (r * cos(phi).x) + bitangent * (r * sin(phi)) + normal * sqrt(max(0.0, 1.0f - sigma.x));
 }

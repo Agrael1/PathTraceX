@@ -4,7 +4,6 @@
 [[vk::push_constant]] ConstantBuffer<FrameIndex> frameIndex : register(b4);
 [[vk::binding(0, 0)]] ConstantBuffer<FrameCBuffer> camera : register(b0);
 [[vk::binding(1, 0)]] ConstantBuffer<MaterialCBuffer> materials : register(b1);
-[[vk::binding(2, 0)]] ConstantBuffer<RenderingConstants> rendering : register(b2);
 [[vk::binding(0, 3)]] RWTexture2D<float4> image[] : register(u0, space3);
 [[vk::binding(0, 4)]] RaytracingAccelerationStructure scene[] : register(t0, space4);
 
@@ -22,7 +21,7 @@ static const float3 faceNormalsBox[] = {
 
 
 float3 SampleSelect(float2 sigma, float3 normal){
-    switch (rendering.samplingFn) {
+    switch (frameIndex.samplingFn) {
     default:
     case 0:
         return UniformHemisphereSample(sigma, normal);
@@ -32,7 +31,7 @@ float3 SampleSelect(float2 sigma, float3 normal){
 }
 float PDFSelect(float3 dir, float3 normal)
 {
-    switch (rendering.samplingFn) {
+    switch (frameIndex.samplingFn) {
     default:
     case 0:
         return 1.0 / (2.0 * PI);
@@ -41,12 +40,14 @@ float PDFSelect(float3 dir, float3 normal)
     }
 }
 
-float3 ComputeBRDF()
+float3 ComputeBRDF(Material mat)
 {
-    switch (rendering.BRDF) {
+    switch (frameIndex.BRDF) {
     default:
     case 0:
         return float3(1.0 / PI, 1.0 / PI, 1.0 / PI);
+    case 1:
+        return mat.diffuse.rgb / PI;
     }
 }
 
@@ -79,7 +80,7 @@ float3 ComputeBRDF()
     payload.depth++;
     TraceRay(scene[frameIndex.frameIndex], RAY_FLAG_NONE, 0xff, 0, 0, 0, rayDesc, payload);
 
-    float3 brdf = ComputeBRDF();
+    float3 brdf = ComputeBRDF(mat);
     float cosTheta = max(dot(normal, newDir), 0.0);
     payload.color = payload.color * brdf * cosTheta / PDFSelect(newDir, normal);
 }
@@ -123,7 +124,7 @@ float3 ComputeBRDF()
     payload.depth++;
     TraceRay(scene[frameIndex.frameIndex], RAY_FLAG_NONE, 0xff, 0, 0, 0, rayDesc, payload);
 
-    float3 brdf = ComputeBRDF();
+    float3 brdf = ComputeBRDF(mat);
     float cosTheta = max(dot(normal, newDir), 0.0);
     payload.color = payload.color * brdf * cosTheta / PDFSelect(newDir, normal);
 }

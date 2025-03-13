@@ -13,10 +13,13 @@ class Scene
     static inline constexpr uint32_t objects_count = spheres_count + 1;
 
     struct RenderingConstants {
-        uint32_t maxDepth;
-        uint32_t samplingFn;
-        uint32_t BRDF;
-    };
+        uint32_t frame;
+        uint32_t frame_count;
+
+        int32_t max_depth = 3;
+        int32_t sampling_fn;
+        int32_t brdf;
+    } constants{};
 
 public:
     Scene(Graphics& gfx, wis::Result result = wis::success);
@@ -44,13 +47,9 @@ private:
     bool limit_max_iterations = false;
     bool accumulate = true;
 
-    int current_sampling = 0;
-    int current_brdf = 0;
     int max_iterations = 100;
-    int bounces = 4;
     int iterations = 0;
 
-    uint32_t frame_count = 0;
 
     wis::RootSignature root;
     wis::RaytracingPipeline pipeline;
