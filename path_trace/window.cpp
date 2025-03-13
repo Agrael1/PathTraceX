@@ -15,8 +15,8 @@ wis::SwapChain w::Window::CreateSwapchain(wis::Result& result, const wis::Device
         .format = w::swap_format,
         .buffer_count = w::swap_frames,
         .stereo = false,
-        .vsync = true,
-        .tearing = false,
+        .vsync = false,
+        .tearing = true,
     };
 
     switch (_platform.current) {

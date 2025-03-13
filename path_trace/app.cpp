@@ -43,7 +43,11 @@ int w::App::run()
         auto& tex = swapchain.GetTexture(frame_index);
         auto res = uicl.Reset();
 
-        CopyToSwapchain();
+        if (scene.GammaCorrection()) {
+            RenderToSwapchain();
+        } else {
+            CopyToSwapchain();
+        }
 
         wis::DX12RenderPassRenderTargetDesc rt_desc{
             .target = swapchain.GetRenderTarget(frame_index),
@@ -184,19 +188,21 @@ void w::App::InitImGui(std::span<wis::DescriptorBindingDesc> bindings)
 void w::App::InitResources()
 {
     wis::Result result = wis::success;
+    auto& device = gfx.GetDevice();
+
     uint32_t requirements_count = 0;
     ImGui_ImplWisdom_DescriptorRequirement* reqs =
             ImGui_ImplWisdom_GetDescriptorRequirements(&requirements_count);
     std::span<ImGui_ImplWisdom_DescriptorRequirement> requirements{ reqs, requirements_count };
 
-    wis::DescriptorBindingDesc bindings [] = {
+    wis::DescriptorBindingDesc bindings[] = {
         { wis::DescriptorType::Texture, 1, 1, 0 },
         { wis::DescriptorType::Sampler, 2, 1, 0 },
         { wis::DescriptorType::RWTexture, 3, 1, 2 },
         { wis::DescriptorType::AccelerationStructure, 4, 1, 2 },
         { wis::DescriptorType::Buffer, 5, 2, 2 },
     };
-   
+
     for (auto& req : requirements) {
         switch (req.type) {
         case wis::DescriptorType::Texture:
@@ -218,6 +224,27 @@ void w::App::InitResources()
     aux_command_list = gfx.device.CreateCommandList(result, wis::QueueType::Graphics);
 
     scene.CreatePipeline(gfx, bindings);
+
+    // Load shaders
+    auto filter_code = w::LoadShader("shaders/filter.vs");
+    wis::Shader filter_vs = device.CreateShader(result, filter_code.data(), filter_code.size());
+
+    filter_code = w::LoadShader("shaders/filter.ps");
+    wis::Shader filter_ps = device.CreateShader(result, filter_code.data(), filter_code.size());
+
+    wis::GraphicsPipelineDesc filter_pipeline_desc{
+        .root_signature = scene.root,
+        .shaders = {
+                .vertex = filter_vs,
+                .pixel = filter_ps,
+        },
+        .attachments = {
+                .attachment_formats = { w::swap_format },
+                .attachments_count = 1,
+        },
+    };
+
+    filter_pipeline = device.CreateGraphicsPipeline(result, filter_pipeline_desc);
 }
 
 void w::App::Frame()
@@ -283,6 +310,45 @@ void w::App::CopyToSwapchain()
           .texture = swap_tex }
     };
     cmd.TextureBarriers(barriers_out, std::size(barriers_out));
+}
+
+void w::App::RenderToSwapchain()
+{
+    uint32_t frame_index = swapchain.CurrentFrame();
+    auto& cmd = ui_command_list[frame_index];
+    auto& uav_tex = uav_texture[frame_index];
+    auto& swap_tex = swapchain.GetTexture(frame_index);
+
+    wis::TextureBarrier2 barriers_in[]{
+        { .barrier = { .sync_before = wis::BarrierSync::None,
+                       .sync_after = wis::BarrierSync::RenderTarget,
+                       .access_before = wis::ResourceAccess::NoAccess,
+                       .access_after = wis::ResourceAccess::RenderTarget,
+                       .state_before = wis::TextureState::Present,
+                       .state_after = wis::TextureState::RenderTarget },
+          .texture = swap_tex }
+    };
+    cmd.TextureBarriers(barriers_in, std::size(barriers_in));
+
+    wis::RenderPassRenderTargetDesc rprtd{
+        .target = swapchain.GetRenderTarget(frame_index),
+        .load_op = wis::LoadOperation::DontCare,
+    };
+    wis::RenderPassDesc rpd{
+        .target_count = 1,
+        .targets = &rprtd,
+    };
+    cmd.BeginRenderPass(rpd);
+
+    cmd.SetPipelineState(filter_pipeline);
+    cmd.SetRootSignature(scene.root);
+    cmd.SetDescriptorStorage(desc_storage);
+    cmd.SetPushConstants(&frame_index, 1, 0, wis::ShaderStages::All);
+    cmd.IASetPrimitiveTopology(wis::PrimitiveTopology::TriangleList);
+    cmd.RSSetScissor({ 0, 0, width, height });
+    cmd.RSSetViewport({ 0.0f, 0.0f, float(width), float(height), 0.0f, 1.0f });
+    cmd.DrawInstanced(3);
+    cmd.EndRenderPass();
 }
 
 void w::App::CreateSizeDependentResources(uint32_t width, uint32_t height)

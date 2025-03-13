@@ -57,6 +57,18 @@ WIS_COMPILE_SHADER(
 	SHADER "shaders/imgui.ps.hlsl"
 	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shaders/imgui.ps"
 )
+
+WIS_COMPILE_SHADER(
+	TARGET shaders
+	SHADER "shaders/filter.vs.hlsl"
+	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shaders/filter.vs"
+)
+WIS_COMPILE_SHADER(
+	TARGET shaders
+	SHADER "shaders/filter.ps.hlsl"
+	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shaders/filter.ps"
+)
+
 WIS_COMPILE_SHADER(
 	TARGET shaders
 	SHADER "shaders/pathtrace.lib.hlsl"

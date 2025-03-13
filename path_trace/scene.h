@@ -3,7 +3,7 @@
 #include "consts.h"
 #include "camera.h"
 
-//lg 32ud99 w
+// lg 32ud99 w
 
 namespace w {
 class Graphics;
@@ -37,6 +37,7 @@ public:
 
     void ZoomCamera(float dz);
     void ResetFrames();
+    bool GammaCorrection() const { return gamma_correction; }
 
 private:
     // UI Data
@@ -50,7 +51,7 @@ private:
     int max_iterations = 100;
     int iterations = 0;
 
-
+public:
     wis::RootSignature root;
     wis::RaytracingPipeline pipeline;
     wis::Buffer sbt_buffer;

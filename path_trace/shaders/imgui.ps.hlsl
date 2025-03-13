@@ -10,8 +10,8 @@ struct PushConstants {
 };
 [[vk::push_constant]] ConstantBuffer<PushConstants> pushConstants : register(b0);
 
-Texture2D texture_ui[] : register(space1);
-SamplerState sampler_ui[] : register(space2);
+[[vk::binding(0, 1)]]Texture2D texture_ui[] : register(t0, space1);
+[[vk::binding(0, 2)]]SamplerState sampler_ui[] : register(s0, space2);
 
 float4 main(PS_INPUT input) : SV_Target
 {

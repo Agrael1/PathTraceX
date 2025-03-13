@@ -27,6 +27,7 @@ private:
 
     void Frame();
     void CopyToSwapchain();
+    void RenderToSwapchain();
 
     void CreateSizeDependentResources(uint32_t width, uint32_t height);
     void MakeTransitions();
@@ -52,5 +53,6 @@ private:
     wis::UnorderedAccessTexture uav_output[w::flight_frames];
 
     w::Scene scene;
+    wis::PipelineState filter_pipeline;
 };
 } // namespace w

@@ -26,6 +26,7 @@ static const float3 skyBottom = float3(0.75, 0.86, 0.93);
     rayDesc.TMax = 1000.0;
 
     Payload payload = (Payload)0;
+    payload.depth++;
     payload.randSeed = InitRand(LaunchID.x + LaunchID.y * LaunchSize.x, frameIndex.frameCount, 16);
     TraceRay(scene[frameIndex.frameIndex], RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xff, 0, 0, 0, rayDesc, payload);
 

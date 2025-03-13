@@ -57,7 +57,7 @@ float3 ComputeBRDF(Material mat)
                                            BuiltInTriangleIntersectionAttributes attrib) {
     uint instanceID = InstanceID();
     Material mat = materials.materials[instanceID];
-    if (payload.depth > 0) {
+    if (payload.depth >= frameIndex.maxDepth) {
         payload.color = mat.emissive.rgb;
         return;
     }
@@ -90,7 +90,7 @@ float3 ComputeBRDF(Material mat)
 {
     uint instance = InstanceID();
     Material mat = materials.materials[instance];
-    if (any(mat.emissive != float4(0, 0, 0, 0)) || payload.depth > 0) {
+    if (any(mat.emissive != float4(0, 0, 0, 0)) || payload.depth >= frameIndex.maxDepth) {
         payload.color = mat.emissive.rgb;
         return;
     }
