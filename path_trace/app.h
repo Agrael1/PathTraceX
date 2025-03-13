@@ -37,8 +37,6 @@ private:
 private:
     int width = 0;
     int height = 0;
-    uint32_t rw_texture_binding = 0;
-    uint32_t as_binding = 0;
 
     w::Window window;
     w::Graphics gfx;

@@ -8,13 +8,14 @@ namespace w {
 class Graphics;
 
 // cbuffer for sphere
-struct alignas(alignof(DirectX::XMFLOAT4A)) ObjectCBuffer {
+struct alignas(alignof(DirectX::XMFLOAT4A)) MaterialCBuffer {
     DirectX::XMFLOAT4A diffuse;
     DirectX::XMFLOAT4A emissive;
+    float roughness;
+};
+struct alignas(alignof(DirectX::XMFLOAT4A)) ObjectData {
     DirectX::XMFLOAT3 pos;
     float scale;
-
-    float roughness;
 };
 
 struct IndexedTriangleList {
@@ -43,18 +44,15 @@ public:
     IndexedTriangleList list;
 };
 
-class ObjectView
-{
+struct ObjectView {
 public:
-    ObjectView() = default;
-    ObjectView(std::string name, ObjectCBuffer mat);
+    bool RenderObjectUI(MaterialCBuffer& out_data, wis::AccelerationInstance& instance_data);
+
+    void GatherInstanceTransform(wis::AccelerationInstance& instance) const;
 
 public:
-    void RenderMatrialUI(ObjectCBuffer& out_data);
-
-private:
-    wis::AccelerationStructure blas{};
-    ObjectCBuffer material{};
+    MaterialCBuffer material{};
+    ObjectData data{};
     std::string name;
 };
 } // namespace w

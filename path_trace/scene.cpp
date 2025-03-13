@@ -2,82 +2,185 @@
 #include "graphics.h"
 #include <imgui.h>
 
+static constexpr const char* SAMPLING_LABELS[4] = { "Uniform", "Cosine", "GGX", "Mix" };
+static constexpr const char* BRDF_LABELS[4] = { "Lambert", "LambertWithAlbedo", "GGX", "Mix" };
+
 w::Scene::Scene(Graphics& gfx, wis::Result result)
-    : object_cbuffer(gfx.allocator.CreateUploadBuffer(result, sizeof(ObjectCBuffer) * objects_count))
+    : object_cbuffer(gfx.allocator.CreateUploadBuffer(result, sizeof(MaterialCBuffer) * objects_count))
     , instance_buffer(gfx.allocator.CreateUploadBuffer(result, sizeof(wis::AccelerationInstance) * objects_count))
+    , camera_buffer(gfx.allocator.CreateUploadBuffer(result, sizeof(w::Camera::CBuffer)))
     , sphere_static(gfx)
     , box_static(gfx)
-    , mapped_cbuffer(object_cbuffer.Map<ObjectCBuffer>(), objects_count)
+    , mapped_cbuffer(object_cbuffer.Map<MaterialCBuffer>(), objects_count)
 {
-    object_views[0] = ObjectView("Box", {
-                                                .diffuse = { 0.8f, 0.8f, 0.8f, 1.0f },
-                                                .emissive = {},
-                                                .roughness = 1,
-                                        });
+    // Box
+    object_views[0] = {
+        .material = {
+                .diffuse = { 0.8f, 0.8f, 0.8f, 1.0f },
+                .emissive = {},
+                .roughness = 1,
+        },
+        .data = { { 0, 0, 0 }, 25 },
+        .name = "Box",
+    };
 
-    constexpr DirectX::XMFLOAT4A sphere_colors[spheres_count] = {
+    constexpr DirectX::XMFLOAT4A sphere_colors[3] = {
         { 1.0f, 0.0f, 0.0f, 1.0f },
         { 0.0f, 1.0f, 0.0f, 1.0f },
         { 0.0f, 0.0f, 1.0f, 1.0f },
-        { 1.0f, 1.0f, 0.0f, 1.0f },
+    };
+    constexpr DirectX::XMFLOAT4A sphere_pos[3] = {
+        {0, 2, 0, 4  },
+        {-10, 2, 2, 2},
+        {5, 0, 10, 2 },
     };
 
-    for (int i = 1; i < objects_count; ++i) {
-        object_views[i] = ObjectView(wis::format("Sphere {}", i), {
-                                                                          .diffuse = sphere_colors[i],
-                                                                          .emissive = {},
-                                                                          .roughness = 1,
-                                                                  });
+    // Light
+    object_views[1] = {
+        .material = {
+                .diffuse = { 1, 1, 1, 1 },
+                .emissive = { 1, 1, 1, 1 },
+                .roughness = 1,
+        },
+        .data = { { 0, 0, 0 }, 2 },
+        .name = wis::format("Sphere {}", 1),
+    };
+
+    for (int i = 2; i < objects_count; ++i) {
+        object_views[i] = {
+            .material = {
+                    .diffuse = sphere_colors[i - 2],
+                    .emissive = {},
+                    .roughness = 1,
+            },
+            .data = { { sphere_pos[i - 2].x, sphere_pos[i - 2].y, sphere_pos[i - 2].z }, sphere_pos[i - 2].w },
+            .name = wis::format("Sphere {}", i),
+        };
     }
+
+    // create mapped instances
+    mapped_instances = { instance_buffer.Map<wis::AccelerationInstance>(), objects_count };
+    mapped_instances[0] = {
+        .instance_id = 0,
+        .mask = 0xFF,
+        .instance_offset = 1,
+        .flags = uint32_t(wis::ASInstanceFlags::TriangleFrontCounterClockwise),
+        .acceleration_structure_handle = 0,
+    };
+    object_views[0].GatherInstanceTransform(mapped_instances[0]);
+
+    for (uint32_t i = 1; i < objects_count; ++i) {
+        mapped_instances[i] = {
+            .instance_id = i,
+            .mask = 0xFF,
+            .instance_offset = 0,
+            .flags = uint32_t(wis::ASInstanceFlags::TriangleCullDisable),
+            .acceleration_structure_handle = 0,
+        };
+        object_views[i].GatherInstanceTransform(mapped_instances[i]);
+    }
+
+    mapped_camera = { camera_buffer.Map<w::Camera::CBuffer>(), w::flight_frames };
+
+    // set material cbuffer
+    for (uint32_t i = 0; i < objects_count; ++i) {
+        mapped_cbuffer[i] = object_views[i].material;
+    }
+
     CreateAccelerationStructures(gfx);
 }
 
 w::Scene::~Scene()
 {
     object_cbuffer.Unmap();
+    instance_buffer.Unmap();
+    camera_buffer.Unmap();
 }
 
 void w::Scene::RenderUI()
 {
     ImGui::Begin("Settings", nullptr);
     ImGui::PushItemWidth(150);
-    // std::string fps_cpu_string = "FPS (CPU): " + std::to_string(fps_cpu);
-    // ImGui::Text(fps_cpu_string.c_str());
-    // std::string fps_string = "FPS (GPU): " + std::to_string(fps_cpu);
-    // ImGui::Text(fps_cpu_string.c_str());
-    // std::string iterations_string = "Iterations: " + std::to_string(iterations);
-    // ImGui::Text(iterations_string.c_str());
+    ImGui::Text(wis::format("FPS (CPU): {}", ImGui::GetIO().Framerate).c_str());
+    ImGui::Text(wis::format("Iterations: {}", iterations).c_str());
+
     ImGui::Checkbox("Show Material Box", &show_material_window[0]);
     ImGui::Checkbox("Show Material Sph#1", &show_material_window[1]);
     ImGui::Checkbox("Show Material Sph#2", &show_material_window[2]);
     ImGui::Checkbox("Show Material Sph#3", &show_material_window[3]);
     ImGui::Checkbox("Show Material Sph#4", &show_material_window[4]);
 
-    // ImGui::Checkbox("Accumulate", &accumulate);
+    ImGui::Checkbox("Accumulate", &accumulate);
     ImGui::Checkbox("Gama Correction", &gamma_correction);
-    // if (ImGui::Checkbox("Limit Iterations", &limit_max_iterations)) {
-    //     clear();
-    // }
-    // if (ImGui::SliderInt("Max Iterations", &max_iterations, 1, 1000)) {
-    //     clear();
-    // }
+    if (ImGui::Checkbox("Limit Iterations", &limit_max_iterations)) {
+        // clear();
+    }
+    if (ImGui::SliderInt("Max Iterations", &max_iterations, 1, 1000)) {
+        // clear();
+    }
 
-    // if (ImGui::Combo("Sampling", &current_sampling, SAMPLING_LABELS, IM_ARRAYSIZE(SAMPLING_LABELS))) {
-    //     clear();
-    // }
-    // if (ImGui::Combo("BRDF", &current_brdf, BRDF_LABELS, IM_ARRAYSIZE(BRDF_LABELS))) {
-    //     clear();
-    // }
-    // if (ImGui::SliderInt("Bounces", &bounces, 1, 100)) {
-    //     clear();
-    // }
+    if (ImGui::Combo("Sampling", &current_sampling, SAMPLING_LABELS, IM_ARRAYSIZE(SAMPLING_LABELS))) {
+        // clear();
+    }
+    if (ImGui::Combo("BRDF", &current_brdf, BRDF_LABELS, IM_ARRAYSIZE(BRDF_LABELS))) {
+        // clear();
+    }
+    if (ImGui::SliderInt("Bounces", &bounces, 1, 24)) {
+        // clear();
+    }
     ImGui::End();
 
+    bool updated_tlas = false;
     for (int m = 0; m < objects_count; ++m) {
         if (show_material_window[m]) {
-            object_views[m].RenderMatrialUI(mapped_cbuffer[m]);
+            updated_tlas |= object_views[m].RenderObjectUI(mapped_cbuffer[m], mapped_instances[m]);
         }
     }
+    if (updated_tlas) {
+        for (int i = 0; i < w::flight_frames; ++i) {
+            update_tlas[i] = true;
+        }
+    }
+}
+
+void w::Scene::RenderScene(Graphics& gfx, wis::CommandList& cmd_list, wis::DescriptorStorageView dstorage, uint32_t current_frame)
+{
+    using namespace wis;
+    camera.PutCBuffer(mapped_camera.data() + current_frame);
+    auto& rt = gfx.GetRaytracing();
+
+    if (update_tlas[current_frame]) {
+        wis::TopLevelASBuildDesc tlas_desc{
+            .flags = wis::AccelerationStructureFlags::PreferFastTrace | wis::AccelerationStructureFlags::AllowUpdate,
+            .instance_count = objects_count,
+            .gpu_address = instance_buffer.GetGPUAddress(),
+            .update = true,
+        };
+
+        uint32_t offset_scratch = tlas_update_size * current_frame;
+        rt.BuildTopLevelAS(cmd_list, tlas_desc, tlas[current_frame], scratch_buffer.GetGPUAddress() + offset_scratch, tlas[current_frame]);
+        update_tlas[current_frame] = false;
+
+        // insert barrier
+        wis::BufferBarrier barrier{
+            .sync_before = wis::BarrierSync::BuildRTAS,
+            .sync_after = wis::BarrierSync::Raytracing,
+            .access_before = wis::ResourceAccess::Common,
+            .access_after = wis::ResourceAccess::UnorderedAccess,
+        };
+        cmd_list.BufferBarrier(barrier, as_buffer);
+    }
+
+    rt.SetPipelineState(cmd_list, pipeline);
+    cmd_list.SetComputeRootSignature(root);
+
+    std::pair<uint32_t, uint32_t> frame_ref = { current_frame, frame_count++ };
+    cmd_list.SetComputePushConstants(&frame_ref, 2, 0);
+    rt.PushDescriptor(cmd_list, wis::DescriptorType::ConstantBuffer, 0, camera_buffer, 0);
+    rt.PushDescriptor(cmd_list, wis::DescriptorType::ConstantBuffer, 1, object_cbuffer, 0);
+    rt.SetDescriptorStorage(cmd_list, dstorage);
+
+    rt.DispatchRays(cmd_list, dispatch_desc);
 }
 
 void w::Scene::CreateAccelerationStructures(Graphics& gfx)
@@ -142,7 +245,8 @@ void w::Scene::CreateAccelerationStructures(Graphics& gfx)
     // allocate buffers
     uint64_t full_size = infos[0].result_size + infos[1].result_size + infos[2].result_size * w::flight_frames;
     as_buffer = gfx.allocator.CreateBuffer(result, full_size, wis::BufferUsage::AccelerationStructureBuffer);
-    wis::Buffer scratch_buffer = gfx.allocator.CreateBuffer(result, infos[0].scratch_size + infos[1].scratch_size + infos[2].scratch_size * w::flight_frames, wis::BufferUsage::StorageBuffer);
+    scratch_buffer = gfx.allocator.CreateBuffer(result, infos[0].scratch_size + infos[1].scratch_size + infos[2].scratch_size * w::flight_frames, wis::BufferUsage::StorageBuffer);
+    tlas_update_size = infos[2].update_size;
 
     // create acceleration structures
     wis::CommandList cmd_list = gfx.device.CreateCommandList(result, wis::QueueType::Graphics);
@@ -155,35 +259,9 @@ void w::Scene::CreateAccelerationStructures(Graphics& gfx)
         offset_result += infos[i].result_size;
     }
 
-    // Fill instance buffer
-    std::span<wis::AccelerationInstance> instances{ instance_buffer.Map<wis::AccelerationInstance>(), objects_count };
-    instances[0] = {
-        .transform = {
-                { 1.0f, 0.0f, 0.0f, 0.0f },
-                { 0.0f, 1.0f, 0.0f, 0.0f },
-                { 0.0f, 0.0f, 1.0f, 0.0f },
-        },
-        .instance_id = 0,
-        .mask = 0xFF,
-        .instance_offset = 0,
-        .flags = 0,
-        .acceleration_structure_handle = rt.GetAccelerationStructureDeviceAddress(blas[0]),
-    };
-    for (uint32_t i = 1; i < objects_count; ++i) {
-        instances[i] = {
-            .transform = {
-                    { 1.0f, 0.0f, 0.0f, 0.0f },
-                    { 0.0f, 1.0f, 0.0f, 0.0f },
-                    { 0.0f, 0.0f, 1.0f, 0.0f },
-            },
-            .instance_id = i,
-            .mask = 0xFF,
-            .instance_offset = 0,
-            .flags = uint32_t(wis::ASInstanceFlags::TriangleCullDisable),
-            .acceleration_structure_handle = rt.GetAccelerationStructureDeviceAddress(blas[1]),
-        };
+    for (int i = 0; i < objects_count; ++i) {
+        mapped_instances[i].acceleration_structure_handle = blas[i != 0];
     }
-    instance_buffer.Unmap();
 
     // insert barrier
     cmd_list.BufferBarrier({ .sync_before = wis::BarrierSync::BuildRTAS,
@@ -210,31 +288,38 @@ void w::Scene::CreatePipeline(Graphics& gfx, std::span<wis::DescriptorBindingDes
     wis::Result result = wis::success;
     auto& device = gfx.GetDevice();
     auto& rt = gfx.GetRaytracing();
+    auto& allocator = gfx.GetAllocator();
 
     wis::PushConstant constants[] = {
-        { .stage = wis::ShaderStages::All, .size_bytes = sizeof(uint32_t) * 2, .bind_register = 0 },
+        { .stage = wis::ShaderStages::All, .size_bytes = sizeof(uint32_t) * 2, .bind_register = 4 },
     };
     wis::PushDescriptor push_desc[] = {
+        { .stage = wis::ShaderStages::All, .type = wis::DescriptorType::ConstantBuffer },
         { .stage = wis::ShaderStages::All, .type = wis::DescriptorType::ConstantBuffer },
     };
 
     root = device.CreateRootSignature(result, constants, std::size(constants), push_desc, std::size(push_desc), bindings.data(), std::size(bindings));
 
     // Load shaders
-    auto raygen_code = w::LoadShader("shaders/pathtrace.raygen");
+    auto raygen_code = w::LoadShader("shaders/pathtrace.lib");
     wis::Shader raygen_shader = device.CreateShader(result, raygen_code.data(), raygen_code.size());
+
+    auto hit_code = w::LoadShader("shaders/hit.lib");
+    wis::Shader hit_shader = device.CreateShader(result, hit_code.data(), hit_code.size());
 
     // Create pipeline
     wis::ShaderView shaders[]{
-        raygen_shader
+        raygen_shader, hit_shader
     };
     wis::ShaderExport exports[]{
         { .entry_point = "RayGeneration", .shader_type = wis::RaytracingShaderType::Raygen },
         { .entry_point = "Miss", .shader_type = wis::RaytracingShaderType::Miss },
-        { .entry_point = "ClosestHit", .shader_type = wis::RaytracingShaderType::ClosestHit },
+        { .entry_point = "ClosestHit", .shader_type = wis::RaytracingShaderType::ClosestHit, .shader_array_index = 1 },
+        { .entry_point = "ClosestHit_Box", .shader_type = wis::RaytracingShaderType::ClosestHit, .shader_array_index = 1 },
     };
     wis::HitGroupDesc hit_groups[]{
         { .type = wis::HitGroupType::Triangles, .closest_hit_export_index = 2 },
+        { .type = wis::HitGroupType::Triangles, .closest_hit_export_index = 3 },
     };
     wis::RaytracingPipelineDesc rt_pipeline_desc{
         .root_signature = root,
@@ -244,18 +329,19 @@ void w::Scene::CreatePipeline(Graphics& gfx, std::span<wis::DescriptorBindingDes
         .export_count = std::size(exports),
         .hit_groups = hit_groups,
         .hit_group_count = std::size(hit_groups),
-        .max_recursion_depth = 1,
+        .max_recursion_depth = 5,
         .max_payload_size = 24,
         .max_attribute_size = 16,
     };
     pipeline = rt.CreateRaytracingPipeline(result, rt_pipeline_desc);
 
     // Create shader binding table
-    wis::ShaderBindingTableInfo sbt_info = raytracing_extension.GetShaderBindingTableInfo();
+    wis::ShaderBindingTableInfo sbt_info = rt.GetShaderBindingTableInfo();
 
-    const uint8_t* shader_ident = rt_pipeline.GetShaderIdentifiers();
+    const uint8_t* shader_ident = pipeline.GetShaderIdentifiers();
 
-    1 raygen, 1 miss, 1 hit group sbt_buffer = setup.allocator.CreateBuffer(result, 1024, wis::BufferUsage::ShaderBindingTable, wis::MemoryType::Upload, wis::MemoryFlags::Mapped);
+    // 1 raygen, 1 miss, 1 hit group
+    sbt_buffer = allocator.CreateBuffer(result, sbt_info.table_start_alignment * 4, wis::BufferUsage::ShaderBindingTable, wis::MemoryType::GPUUpload, wis::MemoryFlags::Mapped);
     auto memory = sbt_buffer.Map<uint8_t>();
 
     // raygen
@@ -270,7 +356,7 @@ void w::Scene::CreatePipeline(Graphics& gfx, std::span<wis::DescriptorBindingDes
     memory += table_increment;
 
     // hit group
-    std::memcpy(memory, shader_ident + sbt_info.entry_size * 2, sbt_info.entry_size);
+    std::memcpy(memory, shader_ident + sbt_info.entry_size * 2, sbt_info.entry_size * std::size(hit_groups));
     memory += table_increment;
     sbt_buffer.Unmap();
 
@@ -282,7 +368,7 @@ void w::Scene::CreatePipeline(Graphics& gfx, std::span<wis::DescriptorBindingDes
     dispatch_desc.callable_shader_table_address = 0;
     dispatch_desc.ray_gen_shader_table_size = sbt_info.entry_size;
     dispatch_desc.miss_shader_table_size = sbt_info.entry_size;
-    dispatch_desc.hit_group_table_size = sbt_info.entry_size;
+    dispatch_desc.hit_group_table_size = sbt_info.entry_size * std::size(hit_groups);
     dispatch_desc.callable_shader_table_size = 0;
     dispatch_desc.miss_shader_table_stride = sbt_info.entry_size;
     dispatch_desc.hit_group_table_stride = sbt_info.entry_size;
@@ -302,4 +388,16 @@ void w::Scene::UpdateDispatch(int width, int height)
     dispatch_desc.width = width;
     dispatch_desc.height = height;
     dispatch_desc.depth = 1;
+
+    camera.SetPerspective(std::numbers::pi_v<float> / 3.0f, float(width) / float(height), 0.1f, 1000.0f);
+}
+
+void w::Scene::RotateCamera(float dx, float dy)
+{
+    camera.Rotate(dx * 0.05f, dy * 0.05f);
+}
+
+void w::Scene::ZoomCamera(float dz)
+{
+    camera.Zoom(dz);
 }

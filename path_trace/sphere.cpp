@@ -121,174 +121,21 @@ w::SphereStatic::SphereStatic(w::Graphics& gfx)
     gfx.ExecuteCommandLists({ cmd_list });
     gfx.WaitForGpu();
 }
+using namespace DirectX;
+// Function to calculate the normal of a face given three vertices
+XMFLOAT3 CalculateNormal(const XMFLOAT3& v0, const XMFLOAT3& v1, const XMFLOAT3& v2)
+{
+    XMVECTOR edge1 = XMLoadFloat3(&v1) - XMLoadFloat3(&v0);
+    XMVECTOR edge2 = XMLoadFloat3(&v2) - XMLoadFloat3(&v0);
+    XMVECTOR normal = XMVector3Cross(edge1, edge2);
+    normal = XMVector3Normalize(normal);
 
-//
-// w::Sphere::Sphere(w::Graphics& gfx)
-//{
-//    using namespace wis;
-//    auto& device = gfx.GetDevice();
-//    auto& alloc = gfx.GetAllocator();
-//    auto& rt = gfx.GetRaytracing();
-//    wis::Result result = wis::success;
-//
-//    auto [vertices, normals, indices] = uv_sphere_generator::generate(32, 32);
-//    vertex_count = (uint32_t)vertices.size();
-//    index_count = (uint32_t)indices.size();
-//
-//    vertex_buffer = alloc.CreateBuffer(result, vertex_count * sizeof(DirectX::XMFLOAT3), BufferUsage::VertexBuffer | BufferUsage::CopyDst | BufferUsage::AccelerationStructureInput);
-//    index_buffer = alloc.CreateBuffer(result, index_count * sizeof(uint16_t), BufferUsage::IndexBuffer | BufferUsage::CopyDst | BufferUsage::AccelerationStructureInput);
-//    auto staging = alloc.CreateUploadBuffer(result, vertex_count * sizeof(DirectX::XMFLOAT3) + index_count * sizeof(uint16_t));
-//
-//    // create cbuffers buffer
-//    constexpr size_t cbuffer_size = wis::detail::aligned_size(sizeof(InstanceData) * w::flight_frames * 3, 256ull) + 256ull * w::flight_frames * 3; // lazy
-//    cbuffer = alloc.CreateBuffer(result, cbuffer_size, BufferUsage::ConstantBuffer, MemoryType::Upload, MemoryFlags::Mapped);
-//    mapped_cbuffer = std::span{ cbuffer.Map<InstanceData>(), w::flight_frames * 3 };
-//    for (uint32_t i = 0; i < 3; i++) {
-//        mapped_cbuffer[i].light_color = { light_color[i] };
-//        mapped_cbuffer[i + 3].light_color = { light_color[i] };
-//        mapped_cbuffer[i].light_radius = radius;
-//        mapped_cbuffer[i + 3].light_radius = radius;
-//    }
-//
-//    DirectX::XMFLOAT3* vertex_data = staging.Map<DirectX::XMFLOAT3>();
-//    std::copy(vertices.begin(), vertices.end(), vertex_data);
-//
-//    uint16_t* index_data = (uint16_t*)(vertex_data + vertex_count);
-//    std::copy(indices.begin(), indices.end(), index_data);
-//    staging.Unmap();
-//
-//    // upload data
-//    auto cmd_list = device.CreateCommandList(result, wis::QueueType::Graphics);
-//    cmd_list.CopyBuffer(staging, vertex_buffer, { .size_bytes = vertex_count * sizeof(DirectX::XMFLOAT3) });
-//    cmd_list.CopyBuffer(staging, index_buffer, { .src_offset = vertex_count * sizeof(DirectX::XMFLOAT3), .size_bytes = index_count * sizeof(uint16_t) });
-//
-//    // slap barriers
-//    // clang-format off
-//    wis::BufferBarrier2 barriers[]{
-//        { .barrier = {
-//                  .sync_before = wis::BarrierSync::Copy,
-//                  .sync_after = wis::BarrierSync::BuildRTAS,
-//                  .access_before = wis::ResourceAccess::CopyDest,
-//                  .access_after = wis::ResourceAccess::Common
-//          },
-//          .buffer = index_buffer },
-//        { .barrier = {
-//                  .sync_before = wis::BarrierSync::Copy,
-//                  .sync_after = wis::BarrierSync::BuildRTAS,
-//                  .access_before = wis::ResourceAccess::CopyDest,
-//                  .access_after = wis::ResourceAccess::Common
-//          },
-//          .buffer = vertex_buffer }
-//    };
-//    // clang-format on
-//    cmd_list.BufferBarriers(barriers, std::size(barriers));
-//
-//    // create blas
-//    AcceleratedGeometryInput blas_input{
-//        .geometry_type = ASGeometryType::Triangles,
-//        .flags = ASGeometryFlags::Opaque,
-//        .vertex_or_aabb_buffer_address = vertex_buffer.GetGPUAddress(),
-//        .vertex_or_aabb_buffer_stride = sizeof(DirectX::XMFLOAT3),
-//        .index_buffer_address = index_buffer.GetGPUAddress(),
-//        .vertex_count = vertex_count,
-//        .triangle_or_aabb_count = index_count / 3,
-//        .vertex_format = wis::DataFormat::RGB32Float,
-//        .index_format = wis::IndexType::UInt16,
-//    };
-//    auto gdesc = CreateGeometryDesc(blas_input);
-//
-//    wis::BottomLevelASBuildDesc blas_desc{
-//        .flags = wis::AccelerationStructureFlags::PreferFastTrace,
-//        .geometry_count = 1,
-//        .geometry_array = { &gdesc }
-//    };
-//    auto info = rt.GetBottomLevelASSize(blas_desc);
-//
-//    as_buffer = alloc.CreateBuffer(result, info.result_size * 3, BufferUsage::AccelerationStructureBuffer);
-//    auto scratch = alloc.CreateBuffer(result, info.scratch_size * 3, BufferUsage::StorageBuffer);
-//
-//    for (uint32_t i = 0; i < 3; i++) {
-//        blas[i] = rt.CreateAccelerationStructure(result, as_buffer, i * info.result_size, info.result_size, ASLevel::Bottom);
-//        rt.BuildBottomLevelAS(cmd_list, blas_desc, blas[i], scratch.GetGPUAddress() + i * info.scratch_size);
-//    }
-//
-//    cmd_list.Close();
-//
-//    gfx.ExecuteCommandLists({ cmd_list });
-//    gfx.WaitForGpu();
-//}
-//
-//
-// void w::Sphere::DepthPass(wis::CommandList& cl, uint32_t frame_index) const
-//{
-//    using namespace DirectX;
-//    constexpr static uint32_t offset = wis::detail::aligned_size(sizeof(InstanceData) * w::flight_frames * 3, 256ull);
-//    DirectX::XMMATRIX* transform_0 = (DirectX::XMMATRIX*)((uint8_t*)mapped_cbuffer.data() + offset);
-//    DirectX::XMMATRIX* transform_1 = (DirectX::XMMATRIX*)((uint8_t*)transform_0 + 256);
-//    DirectX::XMMATRIX* transform_2 = (DirectX::XMMATRIX*)((uint8_t*)transform_1 + 256);
-//
-//    auto moffset = XMMatrixTranslation(2.0f, -2.0f, 0.0f);
-//    auto rotation = XMMatrixRotationY(rotation_y);
-//    auto scale = XMMatrixScaling(radius, radius, radius);
-//    transform_0[frame_index] = scale * moffset * rotation;
-//
-//    cl.PushDescriptor(wis::DescriptorType::ConstantBuffer, 1, cbuffer, offset);
-//    cl.IASetIndexBuffer(index_buffer, wis::IndexType::UInt16, 0);
-//    wis::VertexBufferBinding vb{
-//        .buffer = vertex_buffer,
-//        .size = vertex_count * sizeof(DirectX::XMFLOAT3),
-//        .stride = sizeof(DirectX::XMFLOAT3),
-//        .offset = 0
-//    };
-//    cl.IASetVertexBuffers(&vb, 1);
-//    cl.DrawIndexedInstanced(index_count);
-//
-//    rotation = XMMatrixRotationY(rotation_y + 2.f * std::numbers::pi_v<float> / 3.f);
-//    transform_1[frame_index] = scale * moffset * rotation;
-//
-//    cl.PushDescriptor(wis::DescriptorType::ConstantBuffer, 1, cbuffer, offset + 256);
-//    cl.DrawIndexedInstanced(index_count);
-//
-//    rotation = XMMatrixRotationY(rotation_y + 4.f * std::numbers::pi_v<float> / 3.f);
-//    transform_2[frame_index] = scale * moffset * rotation;
-//
-//    cl.PushDescriptor(wis::DescriptorType::ConstantBuffer, 1, cbuffer, offset + 512);
-//    cl.DrawIndexedInstanced(index_count);
-//}
-//
-// void w::Sphere::PutTransform(DirectX::XMFLOAT3X4* transform1,
-//                             DirectX::XMFLOAT3X4* transform2,
-//                             DirectX::XMFLOAT3X4* transform3) const
-//{
-//    using namespace DirectX;
-//    static constexpr float angle_step = 2.f * std::numbers::pi_v<float> / 3.f;
-//
-//    auto offset = XMMatrixTranslation(2.0f, -2.0f, 0.0f);
-//    auto rotation = XMMatrixRotationY(rotation_y);
-//    auto scale = XMMatrixScaling(radius, radius, radius);
-//    XMStoreFloat3x4(transform1, scale * offset * rotation);
-//
-//    rotation = XMMatrixRotationY(rotation_y + angle_step);
-//    XMStoreFloat3x4(transform2, scale * offset * rotation);
-//
-//    rotation = XMMatrixRotationY(rotation_y + 2.f * angle_step);
-//    XMStoreFloat3x4(transform3, scale * offset * rotation);
-//}
-//
-// void w::Sphere::RenderMaterialUI(SphereCBuffer& out_data)
-//{
-//
-//}
-//
-// void w::Sphere::AddLightRadius(float r)
-//{
-//    radius += r;
-//    radius = std::clamp(radius, 0.05f, 2.0f);
-//    for (uint32_t i = 0; i < 3; i++) {
-//        mapped_cbuffer[i].light_radius = radius;
-//        mapped_cbuffer[i + 3].light_radius = radius;
-//    }
-//}
+    XMFLOAT3 normalFloat3;
+    XMStoreFloat3(&normalFloat3, normal);
+    return normalFloat3;
+}
+
+
 
 w::BoxStatic::BoxStatic(w::Graphics& gfx)
 {
@@ -298,25 +145,41 @@ w::BoxStatic::BoxStatic(w::Graphics& gfx)
     auto& rt = gfx.GetRaytracing();
     wis::Result result = wis::success;
 
-    constexpr auto vertices = std::array{
-        DirectX::XMFLOAT3(-1.0f, -1.0f, -1.0f),
-        DirectX::XMFLOAT3(-1.0f, -1.0f, 1.0f),
-        DirectX::XMFLOAT3(-1.0f, 1.0f, -1.0f),
-        DirectX::XMFLOAT3(-1.0f, 1.0f, 1.0f),
-        DirectX::XMFLOAT3(1.0f, -1.0f, -1.0f),
-        DirectX::XMFLOAT3(1.0f, -1.0f, 1.0f),
-        DirectX::XMFLOAT3(1.0f, 1.0f, -1.0f),
-        DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f),
+    constexpr DirectX::XMFLOAT3 vertices[] = {
+        { -0.5f, -0.5f, -0.5f }, // 0
+        { -0.5f, 0.5f, -0.5f }, // 1
+        { 0.5f, 0.5f, -0.5f }, // 2
+        { 0.5f, -0.5f, -0.5f }, // 3
+        { -0.5f, -0.5f, 0.5f }, // 4
+        { -0.5f, 0.5f, 0.5f }, // 5
+        { 0.5f, 0.5f, 0.5f }, // 6
+        { 0.5f, -0.5f, 0.5f } // 7
     };
 
-    // clang-format off
-    constexpr auto indices = std::array<uint16_t,36> {
-        0, 1, 2, 2, 1, 3, 4, 6, 5, 5, 6, 7, 0, 2, 4, 4, 2, 6, 1, 5, 3, 3, 5, 7, 0, 4, 1, 1, 4, 5, 2, 3, 6, 6, 3, 7,
+    // Define the indices for the box faces (counter-clockwise with inverted normals)
+    constexpr uint16_t indices[] = {
+        // Front face
+        2, 0, 1,
+        3, 0, 2,
+        // Back face
+        5, 4, 6,
+        6, 4, 7,
+        // Left face
+        1, 0, 5,
+        5, 0, 4,
+        // Right face
+        7, 3, 6,
+        6, 3, 2,
+        // Top face
+        2, 1, 6,
+        6, 1, 5,
+        // Bottom face
+        4, 0, 7,
+        7, 0, 3
     };
-    // clang-format on
 
-    list.vertex_count = (uint32_t)vertices.size();
-    list.index_count = (uint32_t)indices.size();
+    list.vertex_count = (uint32_t)std::size(vertices);
+    list.index_count = (uint32_t)std::size(indices);
 
     list.vertex_buffer = alloc.CreateBuffer(result, list.vertex_count * sizeof(DirectX::XMFLOAT3), BufferUsage::VertexBuffer | BufferUsage::CopyDst | BufferUsage::AccelerationStructureInput);
     list.index_buffer = alloc.CreateBuffer(result, list.index_count * sizeof(uint16_t), BufferUsage::IndexBuffer | BufferUsage::CopyDst | BufferUsage::AccelerationStructureInput);
@@ -325,10 +188,10 @@ w::BoxStatic::BoxStatic(w::Graphics& gfx)
     auto staging = alloc.CreateUploadBuffer(result, list.vertex_count * sizeof(DirectX::XMFLOAT3) + list.index_count * sizeof(uint16_t));
 
     DirectX::XMFLOAT3* vertex_data = staging.Map<DirectX::XMFLOAT3>();
-    std::copy(vertices.begin(), vertices.end(), vertex_data);
+    std::copy(std::begin(vertices), std::end(vertices), vertex_data);
 
     uint16_t* index_data = (uint16_t*)(vertex_data + list.vertex_count);
-    std::copy(indices.begin(), indices.end(), index_data);
+    std::copy(std::begin(indices), std::end(indices), index_data);
     staging.Unmap();
 
     // upload data
@@ -341,25 +204,36 @@ w::BoxStatic::BoxStatic(w::Graphics& gfx)
     gfx.WaitForGpu();
 }
 
-w::ObjectView::ObjectView(std::string name, ObjectCBuffer mat)
-    : name(std::move(name))
-    , material(mat)
+bool w::ObjectView::RenderObjectUI(MaterialCBuffer& out_data, wis::AccelerationInstance& instance_data)
 {
-}
-
-void w::ObjectView::RenderMatrialUI(ObjectCBuffer& out_data)
-{
+    using namespace DirectX;
     ImGui::Begin(name.c_str(), nullptr);
     ImGui::PushItemWidth(150);
 
     bool updated = false;
+    bool updated_instance = false;
 
     updated |= ImGui::ColorEdit3("Albedo", reinterpret_cast<float*>(&material.diffuse));
     updated |= ImGui::ColorEdit3("Emission", reinterpret_cast<float*>(&material.emissive));
     updated |= ImGui::SliderFloat("Roughness", reinterpret_cast<float*>(&material.roughness), 0.001f, 1.0f);
+
+    updated_instance |= ImGui::DragFloat3("Position", reinterpret_cast<float*>(&data.pos), 0.01f);
+    updated_instance |= ImGui::DragFloat("Scale", &data.scale, 0.01f, 0.01, 15);
     ImGui::End();
 
     if (updated) {
         out_data = material;
     }
+    if (updated_instance) {
+        GatherInstanceTransform(instance_data);
+    }
+
+    return updated_instance;
+}
+
+void w::ObjectView::GatherInstanceTransform(wis::AccelerationInstance& instance) const
+{
+    using namespace DirectX;
+    XMMATRIX transform = XMMatrixScaling(data.scale, data.scale, data.scale) * XMMatrixTranslation(data.pos.x, data.pos.y, data.pos.z);
+    XMStoreFloat3x4((DirectX::XMFLOAT3X4*)&instance.transform, transform);
 }

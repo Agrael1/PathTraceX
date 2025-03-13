@@ -10,7 +10,6 @@ w::App::App()
     , scene(gfx)
 {
     wis::Result result = wis::success;
-
     InitResources();
 
     auto [w, h] = window.PixelSize();
@@ -48,7 +47,7 @@ int w::App::run()
 
         wis::DX12RenderPassRenderTargetDesc rt_desc{
             .target = swapchain.GetRenderTarget(frame_index),
-            .load_op = wis::LoadOperation::Clear,
+            .load_op = wis::LoadOperation::Load,
             .clear_value = { 0.0f, 0.0f, 0.0f, 1.0f }
         };
         wis::RenderPassDesc rpd{
@@ -72,7 +71,7 @@ int w::App::run()
         uicl.EndRenderPass();
         uicl.Close();
 
-        gfx.ExecuteCommandLists({ uicl });
+        gfx.ExecuteCommandLists({ command_list[frame_index], uicl });
         swapchain.Present(gfx);
     }
 
@@ -95,12 +94,21 @@ uint32_t w::App::ProcessEvents()
             break;
         }
         case SDL_EVENT_KEY_DOWN:
+            if (ImGui::GetIO().WantCaptureKeyboard) {
+                break;
+            }
             OnKeyPressed(event);
             break;
         case SDL_EVENT_MOUSE_MOTION:
+            if (ImGui::GetIO().WantCaptureMouse) {
+                break;
+            }
             OnMouseMove(event);
             break;
         case SDL_EVENT_MOUSE_WHEEL:
+            if (ImGui::GetIO().WantCaptureMouse) {
+                break;
+            }
             OnWheel(event);
             break;
         }
@@ -120,11 +128,13 @@ void w::App::OnKeyPressed(const SDL_Event& event)
 void w::App::OnMouseMove(const SDL_Event& event)
 {
     if (event.motion.state & SDL_BUTTON_LMASK) {
+        scene.RotateCamera(float(event.motion.xrel), float(event.motion.yrel));
     }
 }
 
 void w::App::OnWheel(const SDL_Event& event)
 {
+    scene.ZoomCamera(float(event.wheel.y));
 }
 
 w::Swapchain w::App::CreateSwapchain()
@@ -179,18 +189,25 @@ void w::App::InitResources()
             ImGui_ImplWisdom_GetDescriptorRequirements(&requirements_count);
     std::span<ImGui_ImplWisdom_DescriptorRequirement> requirements{ reqs, requirements_count };
 
-    std::vector<wis::DescriptorBindingDesc> bindings;
-    uint32_t binding_space = 1; // space 0 is reserved for push constants and descriptors
+    wis::DescriptorBindingDesc bindings [] = {
+        { wis::DescriptorType::Texture, 1, 1, 0 },
+        { wis::DescriptorType::Sampler, 2, 1, 0 },
+        { wis::DescriptorType::RWTexture, 3, 1, 2 },
+        { wis::DescriptorType::AccelerationStructure, 4, 1, 2 }
+    };
+   
     for (auto& req : requirements) {
-        bindings.emplace_back(req.type, binding_space++, 0, req.count);
+        switch (req.type) {
+        case wis::DescriptorType::Texture:
+            bindings[0].binding_count += req.count;
+            break;
+        case wis::DescriptorType::Sampler:
+            bindings[1].binding_count += req.count;
+            break;
+        }
     }
-    rw_texture_binding = bindings.size();
-    bindings.emplace_back(wis::DescriptorType::RWTexture, binding_space++, 0, 2);
 
-    as_binding = bindings.size();
-    bindings.emplace_back(wis::DescriptorType::AccelerationStructure, binding_space++, 0, 2);
-
-    desc_storage = gfx.device.CreateDescriptorStorage(result, bindings.data(), uint32_t(bindings.size()));
+    desc_storage = gfx.device.CreateDescriptorStorage(result, bindings, uint32_t(std::size(bindings)));
     InitImGui(bindings);
 
     for (uint32_t i = 0; i < w::swap_frames; i++) {
@@ -198,10 +215,17 @@ void w::App::InitResources()
         ui_command_list[i] = gfx.device.CreateCommandList(result, wis::QueueType::Graphics);
     }
     aux_command_list = gfx.device.CreateCommandList(result, wis::QueueType::Graphics);
+
+    scene.CreatePipeline(gfx, bindings);
 }
 
 void w::App::Frame()
 {
+    uint32_t frame_index = swapchain.CurrentFrame();
+    auto& cmd = command_list[frame_index];
+    cmd.Reset();
+    scene.RenderScene(gfx, cmd, desc_storage, frame_index);
+    cmd.Close();
 }
 
 void w::App::CopyToSwapchain()
@@ -212,7 +236,7 @@ void w::App::CopyToSwapchain()
     auto& swap_tex = swapchain.GetTexture(frame_index);
 
     wis::TextureBarrier2 barriers_in[]{
-        { .barrier = { .sync_before = wis::BarrierSync::NonPixelShading,
+        { .barrier = { .sync_before = wis::BarrierSync::Raytracing,
                        .sync_after = wis::BarrierSync::Copy,
                        .access_before = wis::ResourceAccess::UnorderedAccess,
                        .access_after = wis::ResourceAccess::CopySource,
@@ -231,11 +255,11 @@ void w::App::CopyToSwapchain()
 
     wis::TextureCopyRegion region{
         .src = {
-                .size = { width, height, 1 },
+                .size = { uint32_t(width), uint32_t(height), 1 },
                 .format = w::swap_format,
         },
         .dst = {
-                .size = { width, height, 1 },
+                .size = { uint32_t(width), uint32_t(height), 1 },
                 .format = w::swap_format,
         },
     };
@@ -243,7 +267,7 @@ void w::App::CopyToSwapchain()
 
     wis::TextureBarrier2 barriers_out[]{
         { .barrier = { .sync_before = wis::BarrierSync::Copy,
-                       .sync_after = wis::BarrierSync::NonPixelShading,
+                       .sync_after = wis::BarrierSync::Raytracing,
                        .access_before = wis::ResourceAccess::CopySource,
                        .access_after = wis::ResourceAccess::UnorderedAccess,
                        .state_before = wis::TextureState::CopySource,
@@ -296,7 +320,7 @@ void w::App::CreateSizeDependentResources(uint32_t width, uint32_t height)
     for (uint32_t i = 0; i < w::flight_frames; i++) {
         uav_texture[i] = gfx.allocator.CreateTexture(result, desc);
         uav_output[i] = gfx.device.CreateUnorderedAccessTexture(result, uav_texture[i], uav_desc);
-        desc_storage.WriteRWTexture(rw_texture_binding, i, uav_output[i]);
+        desc_storage.WriteRWTexture(2, i, uav_output[i]);
     }
 
     MakeTransitions();
@@ -312,7 +336,7 @@ void w::App::MakeTransitions()
                        .sync_after = wis::BarrierSync::None,
                        .access_before = wis::ResourceAccess::NoAccess,
                        .access_after = wis::ResourceAccess::NoAccess,
-                       .state_before = wis::TextureState::Common,
+                       .state_before = wis::TextureState::Undefined,
                        .state_after = wis::TextureState::UnorderedAccess },
           .texture = uav_texture[0] }
     };
