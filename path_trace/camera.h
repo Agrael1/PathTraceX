@@ -48,6 +48,10 @@ public:
         _dirty_buffer = true;
         _dirty_view = true;
     }
+    bool AnyDirty() const noexcept
+    {
+        return _dirty_buffer || _dirty_view;
+    }
 
     void PutCBuffer(void* out_buffer)
     {

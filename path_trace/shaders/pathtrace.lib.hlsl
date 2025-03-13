@@ -1,4 +1,5 @@
 #include "shared.hlsli"
+#include "functions.hlsli"
 
 [[vk::push_constant]] ConstantBuffer<FrameIndex> frameIndex : register(b4);
 [[vk::binding(0, 0)]] ConstantBuffer<FrameCBuffer> camera : register(b0);
@@ -25,17 +26,19 @@ static const float3 skyBottom = float3(0.75, 0.86, 0.93);
     rayDesc.TMax = 1000.0;
 
     Payload payload = (Payload)0;
+    payload.randSeed = InitRand(LaunchID.x + LaunchID.y * LaunchSize.x, frameIndex.frameCount, 16);
     TraceRay(scene[frameIndex.frameIndex], RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xff, 0, 0, 0, rayDesc, payload);
 
     // transform y = 1.0 - y
     int2 pixel = int2(LaunchID.x, LaunchSize.y - LaunchID.y);
-    image[frameIndex.frameIndex][pixel] = float4(payload.color, 1.0);
+    float4 color = image[frameIndex.frameIndex][pixel];
+    color = (frameIndex.frameCount * color + float4(payload.color, 1.0f)) / (frameIndex.frameCount + 1);
+    image[frameIndex.frameIndex][pixel] = color;
 }
 
 [shader("miss")] void Miss(inout Payload payload) {
     float slope = normalize(WorldRayDirection()).y;
     float t = saturate(slope * 5 + 0.5);
     payload.color = lerp(skyBottom, skyTop, t);
-    payload.hit = false;
 }
 

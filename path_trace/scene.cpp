@@ -8,10 +8,12 @@ static constexpr const char* BRDF_LABELS[4] = { "Lambert", "LambertWithAlbedo", 
 w::Scene::Scene(Graphics& gfx, wis::Result result)
     : object_cbuffer(gfx.allocator.CreateUploadBuffer(result, sizeof(MaterialCBuffer) * objects_count))
     , instance_buffer(gfx.allocator.CreateUploadBuffer(result, sizeof(wis::AccelerationInstance) * objects_count))
-    , camera_buffer(gfx.allocator.CreateUploadBuffer(result, sizeof(w::Camera::CBuffer)))
+    , camera_buffer(gfx.allocator.CreateUploadBuffer(result, wis::detail::aligned_size(sizeof(w::Camera::CBuffer), 256ull) + sizeof(RenderingConstants)))
     , sphere_static(gfx)
     , box_static(gfx)
     , mapped_cbuffer(object_cbuffer.Map<MaterialCBuffer>(), objects_count)
+    , mapped_rendering_constants(reinterpret_cast<RenderingConstants*>(camera_buffer.Map<uint8_t>() + 256), 1)
+    , mapped_camera(camera_buffer.Map<w::Camera::CBuffer>(), 1)
 {
     // Box
     object_views[0] = {
@@ -80,7 +82,6 @@ w::Scene::Scene(Graphics& gfx, wis::Result result)
         object_views[i].GatherInstanceTransform(mapped_instances[i]);
     }
 
-    mapped_camera = { camera_buffer.Map<w::Camera::CBuffer>(), w::flight_frames };
 
     // set material cbuffer
     for (uint32_t i = 0; i < objects_count; ++i) {
@@ -120,13 +121,16 @@ void w::Scene::RenderUI()
     }
 
     if (ImGui::Combo("Sampling", &current_sampling, SAMPLING_LABELS, IM_ARRAYSIZE(SAMPLING_LABELS))) {
-        // clear();
+        ResetFrames();
+        mapped_rendering_constants[0].samplingFn = current_sampling;
     }
     if (ImGui::Combo("BRDF", &current_brdf, BRDF_LABELS, IM_ARRAYSIZE(BRDF_LABELS))) {
-        // clear();
+        ResetFrames();
+        mapped_rendering_constants[0].BRDF = current_brdf;
     }
     if (ImGui::SliderInt("Bounces", &bounces, 1, 24)) {
-        // clear();
+        ResetFrames();
+        mapped_rendering_constants[0].maxDepth = bounces;
     }
     ImGui::End();
 
@@ -170,6 +174,10 @@ void w::Scene::RenderScene(Graphics& gfx, wis::CommandList& cmd_list, wis::Descr
         };
         cmd_list.BufferBarrier(barrier, as_buffer);
     }
+    if (update_buffers[current_frame]) {
+        frame_count = 0;
+        update_buffers[current_frame] = false;
+    }
 
     rt.SetPipelineState(cmd_list, pipeline);
     cmd_list.SetComputeRootSignature(root);
@@ -178,6 +186,7 @@ void w::Scene::RenderScene(Graphics& gfx, wis::CommandList& cmd_list, wis::Descr
     cmd_list.SetComputePushConstants(&frame_ref, 2, 0);
     rt.PushDescriptor(cmd_list, wis::DescriptorType::ConstantBuffer, 0, camera_buffer, 0);
     rt.PushDescriptor(cmd_list, wis::DescriptorType::ConstantBuffer, 1, object_cbuffer, 0);
+    rt.PushDescriptor(cmd_list, wis::DescriptorType::ConstantBuffer, 2, camera_buffer, wis::detail::aligned_size(sizeof(w::Camera::CBuffer), 256ull));
     rt.SetDescriptorStorage(cmd_list, dstorage);
 
     rt.DispatchRays(cmd_list, dispatch_desc);
@@ -296,6 +305,7 @@ void w::Scene::CreatePipeline(Graphics& gfx, std::span<wis::DescriptorBindingDes
     wis::PushDescriptor push_desc[] = {
         { .stage = wis::ShaderStages::All, .type = wis::DescriptorType::ConstantBuffer },
         { .stage = wis::ShaderStages::All, .type = wis::DescriptorType::ConstantBuffer },
+        { .stage = wis::ShaderStages::All, .type = wis::DescriptorType::ConstantBuffer },
     };
 
     root = device.CreateRootSignature(result, constants, std::size(constants), push_desc, std::size(push_desc), bindings.data(), std::size(bindings));
@@ -329,7 +339,7 @@ void w::Scene::CreatePipeline(Graphics& gfx, std::span<wis::DescriptorBindingDes
         .export_count = std::size(exports),
         .hit_groups = hit_groups,
         .hit_group_count = std::size(hit_groups),
-        .max_recursion_depth = 5,
+        .max_recursion_depth = 24,
         .max_payload_size = 24,
         .max_attribute_size = 16,
     };
@@ -381,10 +391,13 @@ void w::Scene::Bind(Graphics& gfx, wis::DescriptorStorage& storage)
     for (int i = 0; i < w::flight_frames; ++i) {
         rt.WriteAccelerationStructure(storage, 3, i, tlas[i]);
     }
+
+    sphere_static.Bind(storage);
 }
 
 void w::Scene::UpdateDispatch(int width, int height)
 {
+    ResetFrames();
     dispatch_desc.width = width;
     dispatch_desc.height = height;
     dispatch_desc.depth = 1;
@@ -394,10 +407,19 @@ void w::Scene::UpdateDispatch(int width, int height)
 
 void w::Scene::RotateCamera(float dx, float dy)
 {
+    ResetFrames();
     camera.Rotate(dx * 0.05f, dy * 0.05f);
 }
 
 void w::Scene::ZoomCamera(float dz)
 {
+    ResetFrames();
     camera.Zoom(dz);
+}
+
+void w::Scene::ResetFrames()
+{
+    for (int i = 0; i < w::flight_frames; ++i) {
+        update_buffers[i] = true;
+    }
 }

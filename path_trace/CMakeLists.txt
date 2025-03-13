@@ -70,6 +70,7 @@ WIS_COMPILE_SHADER(
 	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shaders/hit.lib"
 	SHADER_MODEL "6.3"
 	TYPE "lib"
+	FLAGS "-enable-16bit-types"
 )
 WIS_INSTALL_DEPS(${PROJECT_NAME})
 

@@ -101,40 +101,37 @@ w::SphereStatic::SphereStatic(w::Graphics& gfx)
 
     list.vertex_buffer = alloc.CreateBuffer(result, list.vertex_count * sizeof(DirectX::XMFLOAT3), BufferUsage::VertexBuffer | BufferUsage::CopyDst | BufferUsage::AccelerationStructureInput);
     list.index_buffer = alloc.CreateBuffer(result, list.index_count * sizeof(uint16_t), BufferUsage::IndexBuffer | BufferUsage::CopyDst | BufferUsage::AccelerationStructureInput);
+    normal_buffer = alloc.CreateBuffer(result, list.vertex_count * sizeof(DirectX::XMFLOAT3), BufferUsage::StorageBuffer | BufferUsage::CopyDst);
 
     // create staging buffer
-    auto staging = alloc.CreateUploadBuffer(result, list.vertex_count * sizeof(DirectX::XMFLOAT3) + list.index_count * sizeof(uint16_t));
+    auto staging = alloc.CreateUploadBuffer(result, list.vertex_count * sizeof(DirectX::XMFLOAT3) * 2 + list.index_count * sizeof(uint16_t));
 
     DirectX::XMFLOAT3* vertex_data = staging.Map<DirectX::XMFLOAT3>();
     std::copy(vertices.begin(), vertices.end(), vertex_data);
 
-    uint16_t* index_data = (uint16_t*)(vertex_data + list.vertex_count);
+    DirectX::XMFLOAT3* normal_data = vertex_data + list.vertex_count;
+    std::copy(normals.begin(), normals.end(), normal_data);
+
+    uint16_t* index_data = (uint16_t*)(normal_data + list.vertex_count);
     std::copy(indices.begin(), indices.end(), index_data);
     staging.Unmap();
 
     // upload data
     auto cmd_list = device.CreateCommandList(result, wis::QueueType::Graphics);
     cmd_list.CopyBuffer(staging, list.vertex_buffer, { .size_bytes = list.vertex_count * sizeof(DirectX::XMFLOAT3) });
-    cmd_list.CopyBuffer(staging, list.index_buffer, { .src_offset = list.vertex_count * sizeof(DirectX::XMFLOAT3), .size_bytes = list.index_count * sizeof(uint16_t) });
+    cmd_list.CopyBuffer(staging, normal_buffer, { .src_offset = list.vertex_count * sizeof(DirectX::XMFLOAT3), .size_bytes = list.vertex_count * sizeof(DirectX::XMFLOAT3) });
+    cmd_list.CopyBuffer(staging, list.index_buffer, { .src_offset = list.vertex_count * sizeof(DirectX::XMFLOAT3) * 2, .size_bytes = list.index_count * sizeof(uint16_t) });
     cmd_list.Close();
 
     gfx.ExecuteCommandLists({ cmd_list });
     gfx.WaitForGpu();
 }
-using namespace DirectX;
-// Function to calculate the normal of a face given three vertices
-XMFLOAT3 CalculateNormal(const XMFLOAT3& v0, const XMFLOAT3& v1, const XMFLOAT3& v2)
+
+void w::SphereStatic::Bind(wis::DescriptorStorage& desc)
 {
-    XMVECTOR edge1 = XMLoadFloat3(&v1) - XMLoadFloat3(&v0);
-    XMVECTOR edge2 = XMLoadFloat3(&v2) - XMLoadFloat3(&v0);
-    XMVECTOR normal = XMVector3Cross(edge1, edge2);
-    normal = XMVector3Normalize(normal);
-
-    XMFLOAT3 normalFloat3;
-    XMStoreFloat3(&normalFloat3, normal);
-    return normalFloat3;
+    desc.WriteStructuredBuffer(4, 0, normal_buffer, sizeof(DirectX::XMFLOAT3), list.vertex_count, 0);
+    desc.WriteStructuredBuffer(4, 1, list.index_buffer, sizeof(uint16_t), list.index_count, 0);
 }
-
 
 
 w::BoxStatic::BoxStatic(w::Graphics& gfx)

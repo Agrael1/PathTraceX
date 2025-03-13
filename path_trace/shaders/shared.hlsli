@@ -1,9 +1,10 @@
 struct Payload
 {
     float3 color;
-    bool allowReflection;
-    bool hit; // for shadows
     uint depth;
+    
+    uint randSeed;
+    bool allowReflection;
 };
 struct FrameIndex
 {
@@ -28,4 +29,10 @@ struct Material {
 struct MaterialCBuffer
 {
     Material materials[5];
+};
+struct RenderingConstants
+{
+    uint maxDepth;
+    uint samplingFn;
+    uint BRDF;
 };

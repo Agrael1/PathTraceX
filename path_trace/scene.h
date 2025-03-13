@@ -12,6 +12,12 @@ class Scene
     static inline constexpr uint32_t spheres_count = 4;
     static inline constexpr uint32_t objects_count = spheres_count + 1;
 
+    struct RenderingConstants {
+        uint32_t maxDepth;
+        uint32_t samplingFn;
+        uint32_t BRDF;
+    };
+
 public:
     Scene(Graphics& gfx, wis::Result result = wis::success);
     ~Scene();
@@ -27,11 +33,13 @@ public:
     void RotateCamera(float dx, float dy);
 
     void ZoomCamera(float dz);
+    void ResetFrames();
 
 private:
     // UI Data
     std::array<bool, 5> show_material_window{};
     std::array<bool, w::flight_frames> update_tlas{};
+    std::array<bool, w::flight_frames> update_buffers{};
     bool gamma_correction = true;
     bool limit_max_iterations = false;
     bool accumulate = true;
@@ -71,5 +79,6 @@ private:
 
     w::Camera camera;
     std::span<w::Camera::CBuffer> mapped_camera;
+    std::span<RenderingConstants> mapped_rendering_constants;
 };
 } // namespace w

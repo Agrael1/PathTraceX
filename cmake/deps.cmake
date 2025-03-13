@@ -19,7 +19,7 @@ include(${GET_CPM_FILE})
 CPMAddPackage(
   NAME Wisdom
   GITHUB_REPOSITORY Agrael1/Wisdom
-  GIT_TAG 0.6.4
+  GIT_TAG 0.6.5
 
   OPTIONS
   "WISDOM_BUILD_TESTS OFF"

@@ -54,7 +54,7 @@ int w::App::run()
             .target_count = 1,
             .targets = &rt_desc,
         };
-        uicl.BeginRenderPass(&rpd);
+        uicl.BeginRenderPass(rpd);
 
         ImGui_ImplWisdom_RenderDrawData(ImGui::GetDrawData(), uicl);
 
@@ -193,7 +193,8 @@ void w::App::InitResources()
         { wis::DescriptorType::Texture, 1, 1, 0 },
         { wis::DescriptorType::Sampler, 2, 1, 0 },
         { wis::DescriptorType::RWTexture, 3, 1, 2 },
-        { wis::DescriptorType::AccelerationStructure, 4, 1, 2 }
+        { wis::DescriptorType::AccelerationStructure, 4, 1, 2 },
+        { wis::DescriptorType::Buffer, 5, 2, 2 },
     };
    
     for (auto& req : requirements) {

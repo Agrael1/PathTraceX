@@ -31,8 +31,11 @@ class SphereStatic
 public:
     SphereStatic(w::Graphics& gfx);
 
+    void Bind(wis::DescriptorStorage& desc);
+
 public:
     IndexedTriangleList list;
+    wis::Buffer normal_buffer;
 };
 
 class BoxStatic
