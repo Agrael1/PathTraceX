@@ -27,7 +27,9 @@ static const float3 skyBottom = float3(0.75, 0.86, 0.93);
     Payload payload = (Payload)0;
     TraceRay(scene[frameIndex.frameIndex], RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xff, 0, 0, 0, rayDesc, payload);
 
-    image[frameIndex.frameIndex][int2(LaunchID.xy)] = float4(payload.color, 1.0);
+    // transform y = 1.0 - y
+    int2 pixel = int2(LaunchID.x, LaunchSize.y - LaunchID.y);
+    image[frameIndex.frameIndex][pixel] = float4(payload.color, 1.0);
 }
 
 [shader("miss")] void Miss(inout Payload payload) {

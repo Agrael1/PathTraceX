@@ -43,7 +43,7 @@ static const float3 faceNormalsBox[] = {
     rayDesc.TMax = 1000.0;
 
     payload.depth++;
-    TraceRay(scene[0], RAY_FLAG_NONE, 0xff, 0, 0, 0, rayDesc, payload);
+    TraceRay(scene[frameIndex.frameIndex], RAY_FLAG_NONE, 0xff, 0, 0, 0, rayDesc, payload);
 
     payload.color = payload.color;
 }
@@ -54,5 +54,5 @@ static const float3 faceNormalsBox[] = {
 
     uint instance = InstanceID();
     Material mat = materials.materials[instance];
-    payload.color = mat.diffuse.rgb;
+    payload.color = mat.emissive;
 }

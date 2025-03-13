@@ -16,7 +16,7 @@ public:
     };
 
 private:
-    DirectX::XMFLOAT2A _orientation{ -0.3668f, -5.68f }; // experimental values
+    DirectX::XMFLOAT2A _orientation{ 0.21, -6.28 }; // experimental values
 
     DirectX::XMFLOAT3A _position{ 0, 0, 0 };
     DirectX::XMFLOAT4A _rotation{ 0, 0, 0, 1 };
@@ -68,7 +68,7 @@ public:
     }
     void ResetOrientation() noexcept
     {
-        _orientation = { 0.733371496f, -3.88009906f };
+        _orientation = { 0.183, -4.68 };
         SetOrientation();
     }
     void ZeroOrientation() noexcept

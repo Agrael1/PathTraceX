@@ -218,7 +218,7 @@ bool w::ObjectView::RenderObjectUI(MaterialCBuffer& out_data, wis::AccelerationI
     updated |= ImGui::SliderFloat("Roughness", reinterpret_cast<float*>(&material.roughness), 0.001f, 1.0f);
 
     updated_instance |= ImGui::DragFloat3("Position", reinterpret_cast<float*>(&data.pos), 0.01f);
-    updated_instance |= ImGui::DragFloat("Scale", &data.scale, 0.01f, 0.01, 15);
+    updated_instance |= ImGui::DragFloat3("Scale", reinterpret_cast<float*>(&data.scale), 0.01f);
     ImGui::End();
 
     if (updated) {
@@ -234,6 +234,6 @@ bool w::ObjectView::RenderObjectUI(MaterialCBuffer& out_data, wis::AccelerationI
 void w::ObjectView::GatherInstanceTransform(wis::AccelerationInstance& instance) const
 {
     using namespace DirectX;
-    XMMATRIX transform = XMMatrixScaling(data.scale, data.scale, data.scale) * XMMatrixTranslation(data.pos.x, data.pos.y, data.pos.z);
+    XMMATRIX transform = XMMatrixScaling(data.scale.x, data.scale.y, data.scale.z) * XMMatrixTranslation(data.pos.x, data.pos.y, data.pos.z);
     XMStoreFloat3x4((DirectX::XMFLOAT3X4*)&instance.transform, transform);
 }

@@ -15,7 +15,7 @@ struct alignas(alignof(DirectX::XMFLOAT4A)) MaterialCBuffer {
 };
 struct alignas(alignof(DirectX::XMFLOAT4A)) ObjectData {
     DirectX::XMFLOAT3 pos;
-    float scale;
+    DirectX::XMFLOAT3 scale;
 };
 
 struct IndexedTriangleList {

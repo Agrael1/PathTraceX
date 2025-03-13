@@ -20,7 +20,7 @@ w::Scene::Scene(Graphics& gfx, wis::Result result)
                 .emissive = {},
                 .roughness = 1,
         },
-        .data = { { 0, 0, 0 }, 25 },
+        .data = { { 0, 5, -6.5 }, { 25, 13, 40 } },
         .name = "Box",
     };
 
@@ -30,9 +30,9 @@ w::Scene::Scene(Graphics& gfx, wis::Result result)
         { 0.0f, 0.0f, 1.0f, 1.0f },
     };
     constexpr DirectX::XMFLOAT4A sphere_pos[3] = {
-        {0, 2, 0, 4  },
-        {-10, 2, 2, 2},
-        {5, 0, 10, 2 },
+        { -10, 1, 4, 2 },
+        { 3.5, -0.25, -11, 1.5 },
+        { 0, 10, 10, 1 },
     };
 
     // Light
@@ -42,7 +42,7 @@ w::Scene::Scene(Graphics& gfx, wis::Result result)
                 .emissive = { 1, 1, 1, 1 },
                 .roughness = 1,
         },
-        .data = { { 0, 0, 0 }, 2 },
+        .data = { { 0, 0.5, 0 }, { 2, 2, 2 } },
         .name = wis::format("Sphere {}", 1),
     };
 
@@ -53,7 +53,7 @@ w::Scene::Scene(Graphics& gfx, wis::Result result)
                     .emissive = {},
                     .roughness = 1,
             },
-            .data = { { sphere_pos[i - 2].x, sphere_pos[i - 2].y, sphere_pos[i - 2].z }, sphere_pos[i - 2].w },
+            .data = { { sphere_pos[i - 2].x, sphere_pos[i - 2].y, sphere_pos[i - 2].z }, { sphere_pos[i - 2].w, sphere_pos[i - 2].w, sphere_pos[i - 2].w } },
             .name = wis::format("Sphere {}", i),
         };
     }
