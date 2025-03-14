@@ -21,7 +21,7 @@ w::Scene::Scene(Graphics& gfx, wis::Result result)
         .material = {
                 .diffuse = { 0.8f, 0.8f, 0.8f, 1.0f },
                 .emissive = {},
-                .roughness = 1,
+                .roughness = 0.2,
         },
         .data = { { 0, 5, -6.5 }, { 25, 13, 40 } },
         .name = "Box",
@@ -103,7 +103,7 @@ void w::Scene::RenderUI()
     ImGui::Begin("Settings", nullptr);
     ImGui::PushItemWidth(150);
     ImGui::Text(wis::format("FPS (CPU): {}", ImGui::GetIO().Framerate).c_str());
-    ImGui::Text(wis::format("Iterations: {}", iterations).c_str());
+    ImGui::Text(wis::format("Iterations: {}", constants.accumulate? constants.limit_iterations ? std::min(int(constants.frame_count), constants.max_iterations) : constants.frame_count : 0).c_str());
 
     ImGui::Checkbox("Show Material Box", &show_material_window[0]);
     ImGui::Checkbox("Show Material Sph#1", &show_material_window[1]);
@@ -111,16 +111,11 @@ void w::Scene::RenderUI()
     ImGui::Checkbox("Show Material Sph#3", &show_material_window[3]);
     ImGui::Checkbox("Show Material Sph#4", &show_material_window[4]);
 
-    ImGui::Checkbox("Accumulate", &accumulate);
-    ImGui::Checkbox("Gama Correction", &gamma_correction);
-    if (ImGui::Checkbox("Limit Iterations", &limit_max_iterations)) {
-        // clear();
-    }
-    if (ImGui::SliderInt("Max Iterations", &max_iterations, 1, 1000)) {
-        // clear();
-    }
-
     bool reset = false;
+    reset |= ImGui::Checkbox("Accumulate", &(bool&)constants.accumulate);
+    ImGui::Checkbox("Gama Correction", &gamma_correction);
+    reset |= ImGui::Checkbox("Limit Iterations", &(bool&)constants.limit_iterations);
+    reset |= ImGui::SliderInt("Max Iterations", &constants.max_iterations, 1, 1000);
 
     reset |= ImGui::Combo("Sampling", &constants.sampling_fn, SAMPLING_LABELS, IM_ARRAYSIZE(SAMPLING_LABELS));
     reset |= ImGui::Combo("BRDF", &constants.brdf, BRDF_LABELS, IM_ARRAYSIZE(BRDF_LABELS));
@@ -134,6 +129,7 @@ void w::Scene::RenderUI()
         }
     }
     if (updated_tlas) {
+        ResetFrames();
         for (int i = 0; i < w::flight_frames; ++i) {
             update_tlas[i] = true;
         }

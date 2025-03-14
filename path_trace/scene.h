@@ -19,6 +19,9 @@ class Scene
         int32_t max_depth = 3;
         int32_t sampling_fn;
         int32_t brdf;
+        uint32_t accumulate;
+        int32_t max_iterations = 500;
+        uint32_t limit_iterations;
     } constants{};
 
 public:

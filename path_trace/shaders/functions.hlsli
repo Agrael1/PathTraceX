@@ -1,4 +1,5 @@
 // NVidia ray tracing tutorial #14
+#include "shared.hlsli"
 
 static const float PI = 3.14159265359;
 // Generates a seed for a random number generator from 2 inputs plus a backoff
@@ -94,4 +95,107 @@ float3 CosineWeightedHemisphereSample(float2 sigma, float3 normal)
 
 	// Get our cosine-weighted hemisphere lobe sample direction
     return tangent * (r * cos(phi).x) + bitangent * (r * sin(phi)) + normal * sqrt(max(0.0, 1.0f - sigma.x));
+}
+
+// Schlick's approximation for Fresnel reflection
+// R0 is the reflectance at normal incidence
+// U is the cosine of the angle between the normal and the incident ray
+float3 SchlickFresnel(float3 R0, float U)
+{
+    return R0 + (float3(1.0f, 1.0f, 1.0f) - R0) * pow(1.0f - U, 5.0f);
+}
+
+float3 LagardeFresnel(float3 F0, float U)
+{
+    return F0 + (float3(1.0f, 1.0f, 1.0f) - F0) * exp2((-5.55473f * U - 6.983146f) * U);
+}
+
+float SmithGGX(float NdotV, float NdotL, float roughness)
+{
+    float k = roughness + 1.0f;
+    k = (k * k) / 8.0f;
+    
+    float G1 = NdotV / (NdotV * (1.0f - k) + k);
+    float G2 = NdotL / (NdotL * (1.0f - k) + k);
+    return G1 * G2;
+}
+
+float ThrowbridgeReitzGGX(float NdotH, float roughness)
+{
+    float alpha2 = roughness * roughness * roughness * roughness;
+    float ndh2 = NdotH * NdotH;
+    
+    float tail = ndh2 * (alpha2 - 1.0f) + 1.0f;
+    float denom = PI * tail * tail;
+    
+    return alpha2 / denom;
+}
+
+float CookTorrance(float NdotV, float NdotL, float NdotH, float VdotH, float LdotH, float roughness, float F0)
+{
+    float D = ThrowbridgeReitzGGX(NdotH, roughness);
+    float G = SmithGGX(NdotV, NdotL, roughness);
+    float F = LagardeFresnel(float3(F0, F0, F0), LdotH).x;
+    
+    return D * G * F / (4.0f * NdotV * NdotL);
+}
+float EvaluateCookTorrance(float3 N, float3 V, float3 L, float roughness)
+{
+    float3 H = normalize(V + L);
+    float NdotV = dot(N, V);
+    float NdotL = dot(N, L);
+    float NdotH = dot(N, H);
+    float VdotH = dot(V, H);
+    float LdotH = dot(L, H);
+    
+    return CookTorrance(NdotV, NdotL, NdotH, VdotH, LdotH, roughness, 1);
+}
+
+// GGX microfacet distribution function
+// returns a microfacet normal in the hemisphere around the normal
+float3 GetGGXMicrofacet(float2 sigma, float3 normal, float roughness)
+{
+    float3 B = GetPerpendicularVector(normal);
+    float3 T = cross(B, normal);
+
+    float a2 = roughness * roughness * roughness * roughness;
+    float cosThetaH = sqrt(max(0.0f, (1.0 - sigma.x) / ((a2 - 1.0) * sigma.x + 1)));
+    float sinThetaH = sqrt(max(0.0f, 1.0f - cosThetaH * cosThetaH));
+    float phiH = sigma.y * PI * 2.0f;
+
+    return T * (sinThetaH * cos(phiH)) + B * (sinThetaH * sin(phiH)) + normal * cosThetaH;
+}
+
+float EvaluateGGXPDF(float3 N, float3 V, float3 L, float roughness)
+{
+    float3 H = normalize(V + L);
+    float NdotH = dot(N, H);
+    float VdotH = dot(V, H);
+    
+    float D = ThrowbridgeReitzGGX(NdotH, roughness);
+    return D * NdotH / (4.0f * VdotH);
+}
+
+float EvaluateMixBRDF(float3 N, float3 V, float3 L, Material mat)
+{
+    float3 H = normalize(V + L);
+    float NdotV = dot(N, V);
+    float NdotL = dot(N, L);
+    float NdotH = dot(N, H);
+    float VdotH = dot(V, H);
+    float LdotH = dot(L, H);
+    
+    float D = ThrowbridgeReitzGGX(NdotH, mat.roughness);
+    float G = SmithGGX(NdotV, NdotL, mat.roughness);
+    float F = LagardeFresnel(float3(1, 1, 1), LdotH);
+    
+    float3 specular = D * G * F / (4.0f * NdotV * NdotL);
+    float3 diffuse = mat.diffuse.rgb / PI;
+    
+    return (float3(1.0f, 1.0f, 1.0f) - F) * diffuse + specular;
+}
+
+float EvaluateMixPDF(float3 N, float3 V, float3 L, Material mat)
+{
+    return EvaluateGGXPDF(N, V, L, mat.roughness) + (dot(L, N) / PI) * mat.roughness;
 }

@@ -1,3 +1,4 @@
+#pragma once
 struct Payload
 {
     float3 color;
@@ -14,6 +15,9 @@ struct FrameIndex
     int maxDepth;
     int samplingFn;
     int BRDF;
+    bool accumulate;
+    int maxIterations;
+    bool limitIterations;
 };
 struct FrameCBuffer
 {

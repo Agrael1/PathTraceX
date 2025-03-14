@@ -212,7 +212,7 @@ bool w::ObjectView::RenderObjectUI(MaterialCBuffer& out_data, wis::AccelerationI
 
     updated |= ImGui::ColorEdit3("Albedo", reinterpret_cast<float*>(&material.diffuse));
     updated |= ImGui::ColorEdit3("Emission", reinterpret_cast<float*>(&material.emissive));
-    updated |= ImGui::SliderFloat("Roughness", reinterpret_cast<float*>(&material.roughness), 0.001f, 1.0f);
+    updated |= ImGui::SliderFloat("Roughness", reinterpret_cast<float*>(&material.roughness), 0.01f, 1.0f);
 
     updated_instance |= ImGui::DragFloat3("Position", reinterpret_cast<float*>(&data.pos), 0.01f);
     updated_instance |= ImGui::DragFloat3("Scale", reinterpret_cast<float*>(&data.scale), 0.01f);
@@ -225,7 +225,7 @@ bool w::ObjectView::RenderObjectUI(MaterialCBuffer& out_data, wis::AccelerationI
         GatherInstanceTransform(instance_data);
     }
 
-    return updated_instance;
+    return updated || updated_instance;
 }
 
 void w::ObjectView::GatherInstanceTransform(wis::AccelerationInstance& instance) const

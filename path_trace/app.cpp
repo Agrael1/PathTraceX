@@ -360,13 +360,6 @@ void w::App::CreateSizeDependentResources(uint32_t width, uint32_t height)
         return;
     }
 
-    if (width <= this->width && height <= this->height) {
-        this->width = width;
-        this->height = height;
-        scene.UpdateDispatch(width, height);
-        return;
-    }
-
     this->width = width;
     this->height = height;
     scene.UpdateDispatch(width, height);

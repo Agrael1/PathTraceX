@@ -11,6 +11,10 @@ static const float3 skyTop = float3(0.24, 0.44, 0.72);
 static const float3 skyBottom = float3(0.75, 0.86, 0.93);
 
 [shader("raygeneration")] void RayGeneration() {
+    if (frameIndex.limitIterations && frameIndex.maxIterations <= frameIndex.frameCount) {
+        return;
+    }
+
     uint3 LaunchID = DispatchRaysIndex();
     uint3 LaunchSize = DispatchRaysDimensions();
 
@@ -31,15 +35,20 @@ static const float3 skyBottom = float3(0.75, 0.86, 0.93);
     TraceRay(scene[frameIndex.frameIndex], RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xff, 0, 0, 0, rayDesc, payload);
 
     // transform y = 1.0 - y
+
     int2 pixel = int2(LaunchID.x, LaunchSize.y - LaunchID.y);
-    float4 color = image[frameIndex.frameIndex][pixel];
-    color = (frameIndex.frameCount * color + float4(payload.color, 1.0f)) / (frameIndex.frameCount + 1);
-    image[frameIndex.frameIndex][pixel] = color;
+    if (frameIndex.accumulate) {
+        float4 color = image[frameIndex.frameIndex][pixel];
+        color = (frameIndex.frameCount * color + float4(payload.color, 1.0f)) / (frameIndex.frameCount + 1);
+        image[frameIndex.frameIndex][pixel] = color;
+    } else {
+        image[frameIndex.frameIndex][pixel] = float4(payload.color, 1.0f);
+    }
 }
 
-[shader("miss")] void Miss(inout Payload payload) {
+        [shader("miss")] void Miss(inout Payload payload)
+{
     float slope = normalize(WorldRayDirection()).y;
     float t = saturate(slope * 5 + 0.5);
     payload.color = lerp(skyBottom, skyTop, t);
 }
-

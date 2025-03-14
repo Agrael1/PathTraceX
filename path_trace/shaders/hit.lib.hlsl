@@ -19,28 +19,38 @@ static const float3 faceNormalsBox[] = {
     float3(0, 1, 0),
 };
 
-
-float3 SampleSelect(float2 sigma, float3 normal){
+float3 SampleSelect(float2 sigma, float3 normal, float roughness, float bias)
+{
     switch (frameIndex.samplingFn) {
     default:
     case 0:
         return UniformHemisphereSample(sigma, normal);
     case 1:
         return CosineWeightedHemisphereSample(sigma, normal);
+    case 2:
+    case 3:
+        return reflect(WorldRayDirection(), GetGGXMicrofacet(sigma, normal, roughness));
+        return bias < roughness
+                ? reflect(WorldRayDirection(), GetGGXMicrofacet(sigma, normal, roughness))
+                : CosineWeightedHemisphereSample(sigma, normal);
     }
 }
-float PDFSelect(float3 dir, float3 normal)
+float PDFSelect(Material mat, float3 V, float3 L, float3 N, float bias)
 {
     switch (frameIndex.samplingFn) {
     default:
     case 0:
         return 1.0 / (2.0 * PI);
     case 1:
-        return dot(dir, normal) / PI;
+        return dot(L, N) / PI;
+    case 2:
+        return EvaluateGGXPDF(N, V, L, mat.roughness);
+    case 3:
+        return mat.roughness < bias ? EvaluateGGXPDF(N, V, L, mat.roughness) : dot(L, N) / PI * mat.roughness;
     }
 }
 
-float3 ComputeBRDF(Material mat)
+float3 ComputeBRDF(Material mat, float3 V, float3 L, float3 N, float bias)
 {
     switch (frameIndex.BRDF) {
     default:
@@ -48,10 +58,12 @@ float3 ComputeBRDF(Material mat)
         return float3(1.0 / PI, 1.0 / PI, 1.0 / PI);
     case 1:
         return mat.diffuse.rgb / PI;
+    case 2:
+        return mat.diffuse.rgb * EvaluateCookTorrance(N, V, L, mat.roughness);
+    case 3:
+        return mat.roughness < bias ? EvaluateCookTorrance(N, V, L, mat.roughness) : (mat.diffuse.rgb / PI * mat.roughness);
     }
 }
-
-
 
 [shader("closesthit")] void ClosestHit_Box(inout Payload payload,
                                            BuiltInTriangleIntersectionAttributes attrib) {
@@ -66,10 +78,13 @@ float3 ComputeBRDF(Material mat)
     uint2 launchDim = DispatchRaysDimensions().xy;
     uint faceID = PrimitiveIndex();
 
+    float bias = saturate(NextRand(payload.randSeed) + 0.01);
     float3 normal = faceNormalsBox[faceID / 2];
-    float3 sample = SampleSelect(NextRand2(payload.randSeed), normal);
+    float3 sample = SampleSelect(NextRand2(payload.randSeed), normal, mat.roughness, bias);
+
     float3 hitPoint = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
     float3 newDir = normalize(sample);
+    float3 V = -normalize(WorldRayDirection());
 
     RayDesc rayDesc;
     rayDesc.Origin = offset_ray(hitPoint, normal);
@@ -80,12 +95,12 @@ float3 ComputeBRDF(Material mat)
     payload.depth++;
     TraceRay(scene[frameIndex.frameIndex], RAY_FLAG_NONE, 0xff, 0, 0, 0, rayDesc, payload);
 
-    float3 brdf = ComputeBRDF(mat);
+    float3 brdf = ComputeBRDF(mat, V, newDir, normal, bias);
     float cosTheta = max(dot(normal, newDir), 0.0);
-    payload.color = payload.color * brdf * cosTheta / PDFSelect(newDir, normal);
+    payload.color = payload.color * brdf * cosTheta / PDFSelect(mat, V, newDir, normal, bias);
 }
 
-[shader("closesthit")] void ClosestHit(inout Payload payload,
+        [shader("closesthit")] void ClosestHit(inout Payload payload,
                                                BuiltInTriangleIntersectionAttributes attrib)
 {
     uint instance = InstanceID();
@@ -110,10 +125,12 @@ float3 ComputeBRDF(Material mat)
         sphere_nrm[0][aindices.z],
     };
 
+    float bias = saturate(NextRand(payload.randSeed) + 0.01);
     float3 normal = normalize(HitAttribute(vn, attrib));
-    float3 sample = SampleSelect(NextRand2(payload.randSeed), normal);
+    float3 sample = SampleSelect(NextRand2(payload.randSeed), normal, mat.roughness, bias);
     float3 hitPoint = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
     float3 newDir = normalize(sample);
+    float3 V = -normalize(WorldRayDirection());
 
     RayDesc rayDesc;
     rayDesc.Origin = offset_ray(hitPoint, normal);
@@ -124,7 +141,7 @@ float3 ComputeBRDF(Material mat)
     payload.depth++;
     TraceRay(scene[frameIndex.frameIndex], RAY_FLAG_NONE, 0xff, 0, 0, 0, rayDesc, payload);
 
-    float3 brdf = ComputeBRDF(mat);
+    float3 brdf = ComputeBRDF(mat, V, newDir, normal, bias);
     float cosTheta = max(dot(normal, newDir), 0.0);
-    payload.color = payload.color * brdf * cosTheta / PDFSelect(newDir, normal);
+    payload.color = payload.color * brdf * cosTheta / PDFSelect(mat, V, newDir, normal, bias);
 }
