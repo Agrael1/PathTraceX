@@ -6,13 +6,13 @@
 
 struct uv_sphere_generator {
     // https://gist.github.com/Pikachuxxxx/5c4c490a7d7679824e0e18af42918efc
-    static std::tuple<std::vector<DirectX::XMFLOAT3>, std::vector<DirectX::XMFLOAT3>, std::vector<uint16_t>> generate(uint32_t latitudes, uint32_t longitudes) noexcept
+    static std::tuple<std::vector<DirectX::XMFLOAT3>, std::vector<DirectX::XMFLOAT3>, std::vector<uint32_t>> generate(uint32_t latitudes, uint32_t longitudes) noexcept
     {
         const float radius = 1.0f;
         std::vector<DirectX::XMFLOAT3> vertices;
         std::vector<DirectX::XMFLOAT3> normals;
         std::vector<DirectX::XMFLOAT2> uv;
-        std::vector<uint16_t> indices;
+        std::vector<uint32_t> indices;
 
         float nx, ny, nz, lengthInv = 1.0f / radius; // normal
         // Temporary vertex
@@ -100,11 +100,11 @@ w::SphereStatic::SphereStatic(w::Graphics& gfx)
     list.index_count = (uint32_t)indices.size();
 
     list.vertex_buffer = alloc.CreateBuffer(result, list.vertex_count * sizeof(DirectX::XMFLOAT3), BufferUsage::VertexBuffer | BufferUsage::CopyDst | BufferUsage::AccelerationStructureInput);
-    list.index_buffer = alloc.CreateBuffer(result, list.index_count * sizeof(uint16_t), BufferUsage::IndexBuffer | BufferUsage::CopyDst | BufferUsage::AccelerationStructureInput);
+    list.index_buffer = alloc.CreateBuffer(result, list.index_count * sizeof(uint32_t), BufferUsage::IndexBuffer | BufferUsage::CopyDst | BufferUsage::AccelerationStructureInput);
     normal_buffer = alloc.CreateBuffer(result, list.vertex_count * sizeof(DirectX::XMFLOAT3), BufferUsage::StorageBuffer | BufferUsage::CopyDst);
 
     // create staging buffer
-    auto staging = alloc.CreateUploadBuffer(result, list.vertex_count * sizeof(DirectX::XMFLOAT3) * 2 + list.index_count * sizeof(uint16_t));
+    auto staging = alloc.CreateUploadBuffer(result, list.vertex_count * sizeof(DirectX::XMFLOAT3) * 2 + list.index_count * sizeof(uint32_t));
 
     DirectX::XMFLOAT3* vertex_data = staging.Map<DirectX::XMFLOAT3>();
     std::copy(vertices.begin(), vertices.end(), vertex_data);
@@ -112,7 +112,7 @@ w::SphereStatic::SphereStatic(w::Graphics& gfx)
     DirectX::XMFLOAT3* normal_data = vertex_data + list.vertex_count;
     std::copy(normals.begin(), normals.end(), normal_data);
 
-    uint16_t* index_data = (uint16_t*)(normal_data + list.vertex_count);
+    uint32_t* index_data = (uint32_t*)(normal_data + list.vertex_count);
     std::copy(indices.begin(), indices.end(), index_data);
     staging.Unmap();
 
@@ -120,7 +120,7 @@ w::SphereStatic::SphereStatic(w::Graphics& gfx)
     auto cmd_list = device.CreateCommandList(result, wis::QueueType::Graphics);
     cmd_list.CopyBuffer(staging, list.vertex_buffer, { .size_bytes = list.vertex_count * sizeof(DirectX::XMFLOAT3) });
     cmd_list.CopyBuffer(staging, normal_buffer, { .src_offset = list.vertex_count * sizeof(DirectX::XMFLOAT3), .size_bytes = list.vertex_count * sizeof(DirectX::XMFLOAT3) });
-    cmd_list.CopyBuffer(staging, list.index_buffer, { .src_offset = list.vertex_count * sizeof(DirectX::XMFLOAT3) * 2, .size_bytes = list.index_count * sizeof(uint16_t) });
+    cmd_list.CopyBuffer(staging, list.index_buffer, { .src_offset = list.vertex_count * sizeof(DirectX::XMFLOAT3) * 2, .size_bytes = list.index_count * sizeof(uint32_t) });
     cmd_list.Close();
 
     gfx.ExecuteCommandLists({ cmd_list });
@@ -130,7 +130,7 @@ w::SphereStatic::SphereStatic(w::Graphics& gfx)
 void w::SphereStatic::Bind(wis::DescriptorStorage& desc)
 {
     desc.WriteStructuredBuffer(4, 0, normal_buffer, sizeof(DirectX::XMFLOAT3), list.vertex_count, 0);
-    desc.WriteStructuredBuffer(4, 1, list.index_buffer, sizeof(uint16_t), list.index_count, 0);
+    desc.WriteStructuredBuffer(4, 1, list.index_buffer, sizeof(uint32_t), list.index_count, 0);
 }
 
 
@@ -212,7 +212,7 @@ bool w::ObjectView::RenderObjectUI(MaterialCBuffer& out_data, wis::AccelerationI
 
     updated |= ImGui::ColorEdit3("Albedo", reinterpret_cast<float*>(&material.diffuse));
     updated |= ImGui::ColorEdit3("Emission", reinterpret_cast<float*>(&material.emissive));
-    updated |= ImGui::SliderFloat("Roughness", reinterpret_cast<float*>(&material.roughness), 0.01f, 1.0f);
+    updated |= ImGui::SliderFloat("Roughness", reinterpret_cast<float*>(&material.roughness), 0.05f, 1.0f);
 
     updated_instance |= ImGui::DragFloat3("Position", reinterpret_cast<float*>(&data.pos), 0.01f);
     updated_instance |= ImGui::DragFloat3("Scale", reinterpret_cast<float*>(&data.scale), 0.01f);

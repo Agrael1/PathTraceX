@@ -8,7 +8,7 @@
 [[vk::binding(0, 4)]] RaytracingAccelerationStructure scene[] : register(t0, space4);
 
 [[vk::binding(0, 5)]] StructuredBuffer<float3> sphere_nrm[] : register(t0, space5); // bindings 0 is vn
-[[vk::binding(0, 5)]] StructuredBuffer<uint16_t> indices[] : register(t0, space6); // overloading binding 5 for indices, 1 is indices
+[[vk::binding(0, 5)]] StructuredBuffer<uint> indices[] : register(t0, space6); // overloading binding 5 for indices, 1 is indices
 
 static const float3 faceNormalsBox[] = {
     float3(0, 0, 1),
