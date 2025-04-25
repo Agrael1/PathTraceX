@@ -26,20 +26,24 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 )
 target_link_libraries(${PROJECT_NAME} 
 	PRIVATE 
-		wis::wisdom-headers
-		wis::debug-headers
-		wis::raytracing-headers
-		wis::platform-headers
-		wis::extended-allocation-headers
+		wisdom-headers
+		wisdom-debug-headers
+		wisdom-raytracing-headers
+		wisdom-platform-headers
+		wisdom-extended-allocation-headers
 
 		SDL3::SDL3
 		imgui::imgui
+		DirectXMath
 )
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy_if_different
-		$<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>
-		$<TARGET_FILE_DIR:${PROJECT_NAME}>
-)
+
+if (WIN32)
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+  	COMMAND ${CMAKE_COMMAND} -E copy_if_different
+  		$<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>
+  		$<TARGET_FILE_DIR:${PROJECT_NAME}>
+  )
+endif()
 
 add_custom_target(shaders)
 
@@ -82,7 +86,6 @@ WIS_COMPILE_SHADER(
 	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shaders/hit.lib"
 	SHADER_MODEL "6.3"
 	TYPE "lib"
-	FLAGS "-enable-16bit-types"
 )
 WIS_INSTALL_DEPS(${PROJECT_NAME})
 

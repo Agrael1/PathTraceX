@@ -19,7 +19,7 @@ include(${GET_CPM_FILE})
 CPMAddPackage(
   NAME Wisdom
   GITHUB_REPOSITORY Agrael1/Wisdom
-  GIT_TAG 0.6.5
+  GIT_TAG 0.6.8
 
   OPTIONS
   "WISDOM_BUILD_TESTS OFF"
@@ -36,6 +36,13 @@ CPMAddPackage(
   "SDL_WERROR OFF"
 )
 
+# DirectXMath
+CPMAddPackage(
+  NAME DirectXMath
+  GITHUB_REPOSITORY microsoft/DirectXMath
+  GIT_TAG main
+)
+
 # imgui
 CPMAddPackage(
   NAME imgui
@@ -44,7 +51,6 @@ CPMAddPackage(
   DOWNLOAD_ONLY TRUE
 )
 set(IMGUI_SRC ${imgui_SOURCE_DIR})
-set(IMGUI_BUILD_DX12_BINDING ON)
 set(IMGUI_BUILD_SDL3_BINDING ON)
 include(imgui)
 
