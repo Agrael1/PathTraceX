@@ -215,7 +215,7 @@ void w::Scene::CreateAccelerationStructures(Graphics& gfx)
                 .vertex_count = sphere_static.list.vertex_count,
                 .triangle_or_aabb_count = sphere_static.list.index_count / 3,
                 .vertex_format = wis::DataFormat::RGB32Float,
-                .index_format = wis::IndexType::UInt16,
+                .index_format = wis::IndexType::UInt32,
         }
     };
     wis::AcceleratedGeometryDesc accelerated_geometry_descs[2]{};
@@ -343,7 +343,7 @@ void w::Scene::CreatePipeline(Graphics& gfx, std::span<wis::DescriptorBindingDes
     const uint8_t* shader_ident = pipeline.GetShaderIdentifiers();
 
     // 1 raygen, 1 miss, 1 hit group
-    sbt_buffer = allocator.CreateBuffer(result, sbt_info.table_start_alignment * 4, wis::BufferUsage::ShaderBindingTable, wis::MemoryType::GPUUpload, wis::MemoryFlags::Mapped);
+    sbt_buffer = allocator.CreateBuffer(result, sbt_info.table_start_alignment * 4, wis::BufferUsage::ShaderBindingTable, wis::MemoryType::Upload, wis::MemoryFlags::Mapped);
     auto memory = sbt_buffer.Map<uint8_t>();
 
     // raygen
